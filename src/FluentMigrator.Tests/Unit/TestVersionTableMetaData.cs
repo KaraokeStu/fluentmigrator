@@ -16,7 +16,6 @@
 //
 #endregion
 
-using System;
 using FluentMigrator.VersionTableInfo;
 
 namespace FluentMigrator.Tests.Unit
@@ -26,16 +25,22 @@ namespace FluentMigrator.Tests.Unit
 	{
 		public const string TABLENAME = "testVersionTableName";
 		public const string COLUMNNAME = "testColumnName";
+		public const string UNIQUEINDEXNAME = "testUniqueIndexName";
+        public const string DESCRIPTIONCOLUMNNAME = "testDescriptionColumnName";
+	    public const string APPLIEDONCOLUMNNAME = "testAppliedOnColumnName";
 
 		public TestVersionTableMetaData()
 		{
 			SchemaName = "testSchemaName";
+            OwnsSchema = true;
 		}
+
+        public object ApplicationContext { get; set; }
 
 		public string SchemaName { get; set; }
 
-		public string TableName
-		{
+        public string TableName
+        {
 			get { return TABLENAME; }
 		}
 
@@ -43,5 +48,23 @@ namespace FluentMigrator.Tests.Unit
 		{
 			get { return COLUMNNAME; }
 		}
+
+		public string UniqueIndexName
+		{
+			get { return UNIQUEINDEXNAME; }
+		}
+
+	    public string AppliedOnColumnName
+	    {
+	        get { return APPLIEDONCOLUMNNAME; }
+	    }
+
+	    public string DescriptionColumnName
+        {
+            get { return DESCRIPTIONCOLUMNNAME; }
+        }
+
+	    public bool OwnsSchema { get; set; }
 	}
 }
+

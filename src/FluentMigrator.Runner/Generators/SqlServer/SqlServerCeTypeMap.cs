@@ -17,13 +17,11 @@
 //
 #endregion
 
-
+using System.Data;
+using FluentMigrator.Runner.Generators.Base;
 
 namespace FluentMigrator.Runner.Generators
 {
-    using System.Data;
-    using FluentMigrator.Runner.Generators.Base;
-
     internal class SqlServerCeTypeMap : TypeMapBase
     {
         public const int AnsiStringCapacity = 8000;
@@ -51,7 +49,7 @@ namespace FluentMigrator.Runner.Generators
             SetTypeMap(DbType.DateTime, "DATETIME");
             SetTypeMap(DbType.Decimal, "NUMERIC(19,5)");
             SetTypeMap(DbType.Decimal, "NUMERIC($size,$precision)", DecimalCapacity);
-            SetTypeMap(DbType.Double, "DOUBLE PRECISION");
+            SetTypeMap(DbType.Double, "FLOAT");
             SetTypeMap(DbType.Guid, "UNIQUEIDENTIFIER");
             SetTypeMap(DbType.Int16, "SMALLINT");
             SetTypeMap(DbType.Int32, "INT");
@@ -63,7 +61,7 @@ namespace FluentMigrator.Runner.Generators
             SetTypeMap(DbType.String, "NVARCHAR($size)", UnicodeStringCapacity);
             SetTypeMap(DbType.String, "NTEXT", int.MaxValue);
             SetTypeMap(DbType.String, "NTEXT", UnicodeTextCapacity);
-            SetTypeMap(DbType.Time, "NVARCHAR(16)");
+            SetTypeMap(DbType.Time, "DATETIME");
             SetTypeMap(DbType.Xml, "NTEXT");
         }
     }

@@ -16,25 +16,27 @@
 //
 #endregion
 
-
+using System.Text;
 
 namespace FluentMigrator.Runner.Generators.SqlServer
 {
     using System;
+    using System.Collections.Generic;
+    using System.Linq;
     using FluentMigrator.Expressions;
     using FluentMigrator.Model;
-    using System.Linq;
-    using System.Collections.Generic;
 
-	public class SqlServer2005Generator : SqlServer2000Generator
-	{
-		public SqlServer2005Generator() : base(new SqlServerColumn(new SqlServer2005TypeMap()))		{
-		}
+    public class SqlServer2005Generator : SqlServer2000Generator
+    {
+        public SqlServer2005Generator()
+            : base(new SqlServerColumn(new SqlServer2005TypeMap()), new SqlServer2005DescriptionGenerator())
+        {
+        }
 
-		protected SqlServer2005Generator(IColumn column) : base(column)
-		{
-		}
-
+        protected SqlServer2005Generator(IColumn column, IDescriptionGenerator descriptionGenerator)
+            : base(column, descriptionGenerator)
+        {
+        }
 
         public override string CreateTable { get { return "{0} ({1})"; } }
         public override string DropTable { get { return "{0}"; } }
@@ -46,19 +48,43 @@ namespace FluentMigrator.Runner.Generators.SqlServer
         public override string RenameColumn { get { return "{0}.{1}', '{2}'"; } }
         public override string RenameTable { get { return "{0}', '{1}'"; } }
 
-        public override string CreateIndex { get { return "CREATE {0}{1}INDEX {2} ON {3}.{4} ({5})"; } }
+        public override string CreateIndex { get { return "CREATE {0}{1}INDEX {2} ON {3}.{4} ({5}{6}{7})"; } }
         public override string DropIndex { get { return "DROP INDEX {0} ON {1}.{2}"; } }
 
         public override string InsertData { get { return "INSERT INTO {0}.{1} ({2}) VALUES ({3})"; } }
         public override string UpdateData { get { return "{0} SET {1} WHERE {2}"; } }
         public override string DeleteData { get { return "DELETE FROM {0}.{1} WHERE {2}"; } }
+        public override string IdentityInsert { get { return "SET IDENTITY_INSERT {0}.{1} {2}"; } }
 
-        public override string CreateConstraint { get { return "ALTER TABLE {0}.{1} ADD CONSTRAINT {2} FOREIGN KEY ({3}) REFERENCES {4}.{5} ({6}){7}{8}"; } }
+        public override string CreateForeignKeyConstraint { get { return "ALTER TABLE {0}.{1} ADD CONSTRAINT {2} FOREIGN KEY ({3}) REFERENCES {4}.{5} ({6}){7}{8}"; } }
+        public override string CreateConstraint { get { return "{0} ADD CONSTRAINT {1} {2}{3} ({4})"; } }
         public override string DeleteConstraint { get { return "{0} DROP CONSTRAINT {1}"; } }
+
+        public virtual string GetIncludeString(CreateIndexExpression column)
+        {
+            return column.Index.Includes.Count > 0 ? ") INCLUDE (" : string.Empty;
+        }
 
         public override string Generate(CreateTableExpression expression)
         {
-            return string.Format("CREATE TABLE {0}.{1}",Quoter.QuoteSchemaName(expression.SchemaName), base.Generate(expression));
+            var descriptionStatements = DescriptionGenerator.GenerateDescriptionStatements(expression);
+            var createTableStatement = string.Format("CREATE TABLE {0}.{1}", Quoter.QuoteSchemaName(expression.SchemaName), base.Generate(expression));
+            var descriptionStatementsArray = descriptionStatements as string[] ?? descriptionStatements.ToArray();
+
+            if (!descriptionStatementsArray.Any())
+                return createTableStatement;
+
+            return ComposeStatements(createTableStatement, descriptionStatementsArray);
+        }
+
+        public override string Generate(AlterTableExpression expression)
+        {
+            var descriptionStatement = DescriptionGenerator.GenerateDescriptionStatement(expression);
+
+            if (string.IsNullOrEmpty(descriptionStatement))
+                return base.Generate(expression);
+
+            return descriptionStatement;
         }
 
         public override string Generate(DeleteTableExpression expression)
@@ -68,12 +94,24 @@ namespace FluentMigrator.Runner.Generators.SqlServer
 
         public override string Generate(CreateColumnExpression expression)
         {
-            return string.Format("ALTER TABLE {0}.{1}", Quoter.QuoteSchemaName(expression.SchemaName), base.Generate(expression));
+            var alterTableStatement = string.Format("ALTER TABLE {0}.{1}", Quoter.QuoteSchemaName(expression.SchemaName), base.Generate(expression));
+            var descriptionStatement = DescriptionGenerator.GenerateDescriptionStatement(expression);
+
+            if (string.IsNullOrEmpty(descriptionStatement))
+                return alterTableStatement;
+
+            return ComposeStatements(alterTableStatement, new[] { descriptionStatement });
         }
 
         public override string Generate(AlterColumnExpression expression)
         {
-            return string.Format("ALTER TABLE {0}.{1}", Quoter.QuoteSchemaName(expression.SchemaName), base.Generate(expression));
+            var alterTableStatement = string.Format("ALTER TABLE {0}.{1}", Quoter.QuoteSchemaName(expression.SchemaName), base.Generate(expression));
+            var descriptionStatement = DescriptionGenerator.GenerateDescriptionStatement(expression);
+
+            if (string.IsNullOrEmpty(descriptionStatement))
+                return alterTableStatement;
+
+            return ComposeStatements(alterTableStatement, new[] { descriptionStatement });
         }
 
         public override string Generate(RenameColumnExpression expression)
@@ -128,6 +166,14 @@ namespace FluentMigrator.Runner.Generators.SqlServer
             List<string> columnValues = new List<string>();
             List<string> insertStrings = new List<string>();
 
+            if (IsUsingIdentityInsert(expression))
+            {
+                insertStrings.Add(string.Format(IdentityInsert,
+                            Quoter.QuoteSchemaName(expression.SchemaName),
+                            Quoter.QuoteTableName(expression.TableName),
+                            "ON"));
+            }
+
             foreach (InsertionDataDefinition row in expression.Rows)
             {
                 columnNames.Clear();
@@ -142,14 +188,22 @@ namespace FluentMigrator.Runner.Generators.SqlServer
                 string values = String.Join(", ", columnValues.ToArray());
                 insertStrings.Add(String.Format(InsertData
                     , Quoter.QuoteSchemaName(expression.SchemaName)
-                    ,Quoter.QuoteTableName(expression.TableName)
+                    , Quoter.QuoteTableName(expression.TableName)
                     , columns
                     , values));
             }
+
+            if (IsUsingIdentityInsert(expression))
+            {
+                insertStrings.Add(string.Format(IdentityInsert,
+                            Quoter.QuoteSchemaName(expression.SchemaName),
+                            Quoter.QuoteTableName(expression.TableName),
+                            "OFF"));
+            }
+
             return String.Join("; ", insertStrings.ToArray());
         }
 
-        
         public override string Generate(CreateForeignKeyExpression expression)
         {
             if (expression.ForeignKey.PrimaryColumns.Count != expression.ForeignKey.ForeignColumns.Count)
@@ -169,7 +223,7 @@ namespace FluentMigrator.Runner.Generators.SqlServer
                 foreignColumns.Add(Quoter.QuoteColumnName(column));
             }
             return string.Format(
-                CreateConstraint,
+                CreateForeignKeyConstraint,
                 Quoter.QuoteSchemaName(expression.ForeignKey.ForeignTableSchema),
                 Quoter.QuoteTableName(expression.ForeignKey.ForeignTable),
                 Quoter.QuoteColumnName(expression.ForeignKey.Name),
@@ -202,104 +256,128 @@ namespace FluentMigrator.Runner.Generators.SqlServer
                 }
             }
 
+            string[] indexIncludes = new string[expression.Index.Includes.Count];
+            IndexIncludeDefinition includeDef;
+
+            for (int i = 0; i < expression.Index.Includes.Count; i++)
+            {
+                includeDef = expression.Index.Includes.ElementAt(i);
+                indexIncludes[i] = Quoter.QuoteColumnName(includeDef.Name);
+            }
+
             return String.Format(CreateIndex
                 , GetUniqueString(expression)
                 , GetClusterTypeString(expression)
                 , Quoter.QuoteIndexName(expression.Index.Name)
                 , Quoter.QuoteSchemaName(expression.Index.SchemaName)
                 , Quoter.QuoteTableName(expression.Index.TableName)
-                , String.Join(", ", indexColumns));
+                , String.Join(", ", indexColumns)
+                , GetIncludeString(expression)
+                , String.Join(", ", indexIncludes));
         }
 
         public override string Generate(DeleteIndexExpression expression)
         {
-            return String.Format(DropIndex, Quoter.QuoteIndexName(expression.Index.Name),Quoter.QuoteSchemaName(expression.Index.SchemaName), Quoter.QuoteTableName(expression.Index.TableName));
+            return String.Format(DropIndex, Quoter.QuoteIndexName(expression.Index.Name), Quoter.QuoteSchemaName(expression.Index.SchemaName), Quoter.QuoteTableName(expression.Index.TableName));
         }
 
-        public override string Generate(DeleteColumnExpression expression)
+        protected override void BuildDelete(DeleteColumnExpression expression, string columnName, StringBuilder builder)
         {
-            // before we drop a column, we have to drop any default value constraints in SQL Server
-            const string sql = @"
-			DECLARE @default sysname, @sql nvarchar(max);
+            builder.AppendLine(Generate(new DeleteDefaultConstraintExpression
+            {
+                ColumnName = columnName,
+                SchemaName = expression.SchemaName,
+                TableName = expression.TableName
+            }));
 
-			-- get name of default constraint
-			SELECT @default = name
-			FROM sys.default_constraints 
-			WHERE parent_object_id = object_id('{2}.{0}')
-			AND type = 'D'
-			AND parent_column_id = (
-				SELECT column_id 
-				FROM sys.columns 
-				WHERE object_id = object_id('{2}.{0}')
-				AND name = '{3}'
-			);
+            builder.AppendLine();
 
-			-- create alter table command as string and run it
-			SET @sql = N'ALTER TABLE {2}.{0} DROP CONSTRAINT ' + @default;
-			EXEC sp_executesql @sql;
-
-			-- now we can finally drop column
-			ALTER TABLE {2}.{0} DROP COLUMN {1};";
-
-            return String.Format(sql, 
-              Quoter.QuoteTableName(expression.TableName), 
-              Quoter.QuoteColumnName(expression.ColumnName), 
-              Quoter.QuoteSchemaName(expression.SchemaName),
-              expression.ColumnName);
+            builder.AppendLine(String.Format("-- now we can finally drop column" + Environment.NewLine + "ALTER TABLE {2}.{0} DROP COLUMN {1};",
+                                         Quoter.QuoteTableName(expression.TableName),
+                                         Quoter.QuoteColumnName(columnName),
+                                         Quoter.QuoteSchemaName(expression.SchemaName)));
         }
 
         public override string Generate(AlterDefaultConstraintExpression expression)
         {
-            const string sql =
-                @"
-			DECLARE @default sysname, @sql nvarchar(max);
+            // before we alter a default constraint on a column, we have to drop any default value constraints in SQL Server
+            var builder = new StringBuilder();
 
-			-- get name of default constraint
-			SELECT @default = name
-			FROM sys.default_constraints 
-			WHERE parent_object_id = object_id('{3}.{0}')
-			AND type = 'D'
-			AND parent_column_id = (
-				SELECT column_id 
-				FROM sys.columns 
-				WHERE object_id = object_id('{3}.{0}')
-				AND name = '{4}'
-			);
+            builder.AppendLine(Generate(new DeleteDefaultConstraintExpression
+            {
+                ColumnName = expression.ColumnName,
+                SchemaName = expression.SchemaName,
+                TableName = expression.TableName
+            }));
 
-			-- create alter table command to drop contraint as string and run it
-			SET @sql = N'ALTER TABLE {3}.{0} DROP CONSTRAINT ' + @default;
-			EXEC sp_executesql @sql;
+            builder.AppendLine();
 
-			-- create alter table command to create new default constraint as string and run it
-			SET @sql = N'ALTER TABLE {3}.{0} WITH NOCHECK ADD CONSTRAINT [' + @default + '] DEFAULT({2}) FOR {1}';
-			EXEC sp_executesql @sql;";
+            builder.Append(String.Format("-- create alter table command to create new default constraint as string and run it" + Environment.NewLine + "ALTER TABLE {3}.{0} WITH NOCHECK ADD CONSTRAINT {4} DEFAULT({2}) FOR {1};",
+                Quoter.QuoteTableName(expression.TableName),
+                Quoter.QuoteColumnName(expression.ColumnName),
+                ((SqlServerColumn)Column).FormatDefaultValue(expression.DefaultValue),
+                Quoter.QuoteSchemaName(expression.SchemaName),
+                Quoter.QuoteConstraintName(SqlServerColumn.GetDefaultConstraintName(expression.TableName, expression.ColumnName))));
 
-            return String.Format(sql, 
-              Quoter.QuoteTableName(expression.TableName), 
-              Quoter.QuoteColumnName(expression.ColumnName), 
-              Quoter.QuoteValue(expression.DefaultValue),
-              Quoter.QuoteSchemaName(expression.SchemaName),
-              expression.ColumnName);
+            return builder.ToString();
         }
 
+        public override string Generate(CreateConstraintExpression expression)
+        {
+            return string.Format("ALTER TABLE {0}.{1}", Quoter.QuoteSchemaName(expression.Constraint.SchemaName), base.Generate(expression));
+        }
 
+        public override string Generate(DeleteDefaultConstraintExpression expression)
+        {
+            string sql =
+                "DECLARE @default sysname, @sql nvarchar(max);" + Environment.NewLine + Environment.NewLine +
+                "-- get name of default constraint" + Environment.NewLine +
+                "SELECT @default = name" + Environment.NewLine +
+                "FROM sys.default_constraints" + Environment.NewLine +
+                "WHERE parent_object_id = object_id('{2}.{0}')" + Environment.NewLine +
+                "AND type = 'D'" + Environment.NewLine +
+                "AND parent_column_id = (" + Environment.NewLine +
+                "SELECT column_id" + Environment.NewLine +
+                "FROM sys.columns" + Environment.NewLine +
+                "WHERE object_id = object_id('{2}.{0}')" + Environment.NewLine +
+                "AND name = '{1}'" + Environment.NewLine +
+                ");" + Environment.NewLine + Environment.NewLine +
+                "-- create alter table command to drop constraint as string and run it" + Environment.NewLine +
+                "SET @sql = N'ALTER TABLE {2}.{0} DROP CONSTRAINT ' + @default;" + Environment.NewLine +
+                "EXEC sp_executesql @sql;";
+            return String.Format(sql, Quoter.QuoteTableName(expression.TableName), expression.ColumnName, Quoter.QuoteSchemaName(expression.SchemaName));
+        }
 
+        public override string Generate(DeleteConstraintExpression expression)
+        {
+            return string.Format("ALTER TABLE {0}.{1}", Quoter.QuoteSchemaName(expression.Constraint.SchemaName), base.Generate(expression));
+        }
 
-        
+        public override string Generate(CreateSchemaExpression expression)
+        {
+            return String.Format(CreateSchema, Quoter.QuoteSchemaName(expression.SchemaName));
+        }
 
-		public override string Generate(CreateSchemaExpression expression)
-		{
-			return String.Format(CreateSchema, Quoter.QuoteSchemaName(expression.SchemaName));
-		}
+        public override string Generate(DeleteSchemaExpression expression)
+        {
+            return String.Format(DropSchema, Quoter.QuoteSchemaName(expression.SchemaName));
+        }
 
-		public override string Generate(DeleteSchemaExpression expression)
-		{
-			return String.Format(DropSchema, Quoter.QuoteSchemaName(expression.SchemaName));
-		}
-
-        public override string Generate( AlterSchemaExpression expression )
+        public override string Generate(AlterSchemaExpression expression)
         {
             return String.Format(AlterSchema, Quoter.QuoteSchemaName(expression.DestinationSchemaName), Quoter.QuoteSchemaName(expression.SourceSchemaName), Quoter.QuoteTableName(expression.TableName));
         }
-	}
+
+        private string ComposeStatements(string ddlStatement, IEnumerable<string> otherStatements)
+        {
+            var otherStatementsArray = otherStatements.ToArray();
+
+            var statementsBuilder = new StringBuilder();
+            statementsBuilder.AppendLine(ddlStatement);
+            statementsBuilder.AppendLine("GO");
+            statementsBuilder.AppendLine(string.Join(";", otherStatementsArray));
+
+            return statementsBuilder.ToString();
+        }
+    }
 }

@@ -21,55 +21,100 @@ using FluentMigrator.VersionTableInfo;
 
 namespace FluentMigrator.Runner.Versioning
 {
-	public class VersionMigration : Migration
-	{
-		private IVersionTableMetaData _versionTableMetaData;
+    public class VersionMigration : Migration
+    {
+        private IVersionTableMetaData _versionTableMetaData;
 
-		public VersionMigration(IVersionTableMetaData versionTableMetaData)
-		{
-			_versionTableMetaData = versionTableMetaData;
-		}
+        public VersionMigration(IVersionTableMetaData versionTableMetaData)
+        {
+            _versionTableMetaData = versionTableMetaData;
+        }
 
-		public override void Up()
-		{
-			Create.Table(_versionTableMetaData.TableName)
+        public override void Up()
+        {
+            Create.Table(_versionTableMetaData.TableName)
                 .InSchema(_versionTableMetaData.SchemaName)
-				.WithColumn(_versionTableMetaData.ColumnName).AsInt64().NotNullable();
-		}
+                .WithColumn(_versionTableMetaData.ColumnName).AsInt64().NotNullable();
+        }
 
-		public override void Down()
-		{
-			Delete.Table(_versionTableMetaData.TableName).InSchema(_versionTableMetaData.SchemaName);
-		}
-	}
+        public override void Down()
+        {
+            Delete.Table(_versionTableMetaData.TableName).InSchema(_versionTableMetaData.SchemaName);
+        }
+    }
 
     public class VersionSchemaMigration : Migration
     {
         private IVersionTableMetaData _versionTableMetaData;
 
         public VersionSchemaMigration(IVersionTableMetaData versionTableMetaData)
-		{
-			_versionTableMetaData = versionTableMetaData;
-		}
+        {
+            _versionTableMetaData = versionTableMetaData;
+        }
 
         public override void Up()
         {
-            if(!string.IsNullOrEmpty(_versionTableMetaData.SchemaName))
+            if (!string.IsNullOrEmpty(_versionTableMetaData.SchemaName))
                 Create.Schema(_versionTableMetaData.SchemaName);
         }
 
         public override void Down()
         {
-            if(!string.IsNullOrEmpty(_versionTableMetaData.SchemaName))
+            if (!string.IsNullOrEmpty(_versionTableMetaData.SchemaName))
                 Delete.Schema(_versionTableMetaData.SchemaName);
         }
     }
 
-	internal static class DateTimeExtensions
-	{
-		public static string ToISO8601(this DateTime dateTime)
-		{
-			return dateTime.ToString("u").Replace("Z", "");
-		}
-	}
+    public class VersionUniqueMigration : ForwardOnlyMigration
+    {
+        private readonly IVersionTableMetaData versionTableMeta;
+
+        public VersionUniqueMigration(IVersionTableMetaData versionTableMeta)
+        {
+            this.versionTableMeta = versionTableMeta;
+        }
+
+        public override void Up()
+        {
+            Create.Index(versionTableMeta.UniqueIndexName)
+                .OnTable(versionTableMeta.TableName)
+                .InSchema(versionTableMeta.SchemaName)
+                .WithOptions().Unique()
+                .WithOptions().Clustered()
+                .OnColumn(versionTableMeta.ColumnName);
+
+            Alter.Table(versionTableMeta.TableName).InSchema(versionTableMeta.SchemaName).AddColumn(versionTableMeta.AppliedOnColumnName).AsDateTime().Nullable();
+        }
+
+    }
+
+    public class VersionDescriptionMigration : Migration
+    {
+        private readonly IVersionTableMetaData versionTableMeta;
+
+        public VersionDescriptionMigration(IVersionTableMetaData versionTableMeta)
+        {
+            this.versionTableMeta = versionTableMeta;
+        }
+
+        public override void Up()
+        {
+            Alter.Table(versionTableMeta.TableName).InSchema(versionTableMeta.SchemaName)
+                .AddColumn(versionTableMeta.DescriptionColumnName).AsString(1024).Nullable();
+        }
+
+        public override void Down()
+        {
+            Delete.Column(versionTableMeta.DescriptionColumnName)
+                  .FromTable(versionTableMeta.TableName).InSchema(versionTableMeta.SchemaName);
+        }
+    }
+
+    internal static class DateTimeExtensions
+    {
+        public static string ToISO8601(this DateTime dateTime)
+        {
+            return dateTime.ToString("u").Replace("Z", "");
+        }
+    }
 }

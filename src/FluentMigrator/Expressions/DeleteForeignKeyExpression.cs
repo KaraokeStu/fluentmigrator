@@ -18,34 +18,44 @@
 
 using System;
 using System.Collections.Generic;
+using FluentMigrator.Infrastructure;
 using FluentMigrator.Model;
 using System.Linq;
 
 namespace FluentMigrator.Expressions
 {
-	public class DeleteForeignKeyExpression : MigrationExpressionBase
-	{
-		public virtual ForeignKeyDefinition ForeignKey { get; set; }
+    public class DeleteForeignKeyExpression : MigrationExpressionBase
+    {
+        public virtual ForeignKeyDefinition ForeignKey { get; set; }
 
-		public DeleteForeignKeyExpression()
-		{
-			ForeignKey = new ForeignKeyDefinition();
-		}
+        public DeleteForeignKeyExpression()
+        {
+            ForeignKey = new ForeignKeyDefinition();
+        }
 
         public override void ApplyConventions(IMigrationConventions conventions)
         {
             ForeignKey.ApplyConventions(conventions);
         }
 
-		public override void CollectValidationErrors(ICollection<string> errors)
-		{
-			ForeignKey.CollectValidationErrors(errors);
-		}
+        public override void CollectValidationErrors(ICollection<string> errors)
+        {
+            if (ForeignKey.ForeignColumns.Count > 0)
+                ForeignKey.CollectValidationErrors(errors);
+            else
+            {
+                if (String.IsNullOrEmpty(ForeignKey.Name))
+                    errors.Add(ErrorMessages.ForeignKeyNameCannotBeNullOrEmpty);
 
-		public override void ExecuteWith(IMigrationProcessor processor)
-		{
-			processor.Process(this);
-		}
+                if (String.IsNullOrEmpty(ForeignKey.ForeignTable))
+                    errors.Add(ErrorMessages.ForeignTableNameCannotBeNullOrEmpty);
+            }
+        }
+
+        public override void ExecuteWith(IMigrationProcessor processor)
+        {
+            processor.Process(this);
+        }
 
         public override IMigrationExpression Reverse()
         {
@@ -58,8 +68,8 @@ namespace FluentMigrator.Expressions
             // there isn't a way to autoreverse the type 1
             //  but we can turn the type 2 into Create.ForeignKey().FromTable() ...
 
-            // only type 1 has the specific FK Name so if it's there then we can't auto-reverse
-            if (!String.IsNullOrEmpty(ForeignKey.Name))
+            // only type 2 has foreign column(s) and primary column(s)
+            if (!ForeignKey.HasForeignAndPrimaryColumnsDefined())
             {
                 return base.Reverse();
             }
@@ -80,11 +90,11 @@ namespace FluentMigrator.Expressions
             return new CreateForeignKeyExpression { ForeignKey = reverseForeignKey };
         }
 
-		public override string ToString()
-		{
-			return base.ToString() + ForeignKey.Name + " "
-				+ ForeignKey.ForeignTable + " (" + string.Join(", ", ForeignKey.ForeignColumns.ToArray()) + ") "
-				+ ForeignKey.PrimaryTable + " (" + string.Join(", ", ForeignKey.PrimaryColumns.ToArray()) + ")";
-		}
-	}
+        public override string ToString()
+        {
+            return base.ToString() + ForeignKey.Name + " "
+                + ForeignKey.ForeignTable + " (" + string.Join(", ", ForeignKey.ForeignColumns.ToArray()) + ") "
+                + ForeignKey.PrimaryTable + " (" + string.Join(", ", ForeignKey.PrimaryColumns.ToArray()) + ")";
+        }
+    }
 }

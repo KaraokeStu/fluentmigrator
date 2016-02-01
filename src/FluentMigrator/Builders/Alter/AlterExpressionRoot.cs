@@ -1,4 +1,4 @@
-﻿#region License
+#region License
 // 
 // Copyright (c) 2007-2009, Sean Chambers <schambers80@gmail.com>
 // 
@@ -23,33 +23,27 @@ using FluentMigrator.Infrastructure;
 
 namespace FluentMigrator.Builders.Alter
 {
-	public class AlterExpressionRoot : IAlterExpressionRoot
-	{
-		private readonly IMigrationContext _context;
+    public class AlterExpressionRoot : IAlterExpressionRoot
+    {
+        private readonly IMigrationContext _context;
 
-		public AlterExpressionRoot(IMigrationContext context)
-		{
-			_context = context;
-		}
+        public AlterExpressionRoot(IMigrationContext context)
+        {
+            _context = context;
+        }
 
-        public IAlterTableAddColumnOrAlterColumnOrSchemaSyntax Table(string tableName)
+        public IAlterTableAddColumnOrAlterColumnOrSchemaOrDescriptionSyntax Table(string tableName)
         {
             var expression = new AlterTableExpression { TableName = tableName };
             _context.Expressions.Add(expression);
             return new AlterTableExpressionBuilder(expression, _context);
         }
 
-		//public void Schema(string schemaName)
-		//{
-		//    var expression = new AlterSchemaExpression { SchemaName = schemaName };
-		//    _context.Expressions.Add(expression);
-		//}
-
-		public IAlterColumnOnTableSyntax Column(string columnName)
-		{
-			var expression = new AlterColumnExpression { Column = { Name = columnName } };
-			_context.Expressions.Add(expression);
-			return new AlterColumnExpressionBuilder(expression, _context);
-		}
-	}
+        public IAlterColumnOnTableSyntax Column(string columnName)
+        {
+            var expression = new AlterColumnExpression { Column = { Name = columnName } };
+            _context.Expressions.Add(expression);
+            return new AlterColumnExpressionBuilder(expression, _context);
+        }
+    }
 }

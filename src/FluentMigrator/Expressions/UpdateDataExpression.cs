@@ -1,4 +1,4 @@
-﻿#region License
+#region License
 // 
 // Copyright (c) 2007-2009, Sean Chambers <schambers80@gmail.com>
 // 
@@ -19,7 +19,6 @@
 using System;
 using System.Collections.Generic;
 using FluentMigrator.Infrastructure;
-using FluentMigrator.Model;
 
 namespace FluentMigrator.Expressions
 {
@@ -30,11 +29,18 @@ namespace FluentMigrator.Expressions
 
         public List<KeyValuePair<string, object>> Set { get; set; }
         public List<KeyValuePair<string, object>> Where { get; set; }
+        public bool IsAllRows { get; set; }
 
         public override void CollectValidationErrors(ICollection<string> errors)
         {
             if (String.IsNullOrEmpty(TableName))
                 errors.Add(ErrorMessages.TableNameCannotBeNullOrEmpty);
+
+            if (!IsAllRows && (Where == null || Where.Count == 0)) 
+                errors.Add(ErrorMessages.UpdateDataExpressionMustSpecifyWhereClauseOrAllRows);
+
+            if (IsAllRows && Where != null && Where.Count > 0)
+                errors.Add(ErrorMessages.UpdateDataExpressionMustNotSpecifyBothWhereClauseAndAllRows);
         }
 
         public override void ExecuteWith(IMigrationProcessor processor)

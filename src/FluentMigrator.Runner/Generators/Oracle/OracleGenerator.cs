@@ -1,141 +1,188 @@
-﻿#region License
-
-// 
-// Copyright (c) 2007-2009, Sean Chambers <schambers80@gmail.com>
-// 
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//   http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-
-#endregion
-
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Text;
 using FluentMigrator.Expressions;
 using FluentMigrator.Model;
 using FluentMigrator.Runner.Generators.Generic;
+using FluentMigrator.Runner.Helpers;
 
 namespace FluentMigrator.Runner.Generators.Oracle
 {
-
     public class OracleGenerator : GenericGenerator
     {
+
+        
         public OracleGenerator()
-            : base(new OracleColumn(), new OracleQuoter())
+            : base(new OracleColumn(new OracleQuoter()), new OracleQuoter(), new OracleDescriptionGenerator())
         {
         }
 
-        public override string AddColumn { get { return "ALTER TABLE {0} ADD {1}"; } }
+        public OracleGenerator(bool useQuotedIdentifiers)
+            : base(new OracleColumn(GetQuoter(useQuotedIdentifiers)), GetQuoter(useQuotedIdentifiers), new OracleDescriptionGenerator())
+        {
+        }
 
-        public override string AlterColumn { get { return "ALTER TABLE {0} MODIFY {1}"; } }
+        private static IQuoter GetQuoter(bool useQuotedIdentifiers)
+        {
+            return useQuotedIdentifiers ? (IQuoter)new OracleQuoterQuotedIdentifier() : (IQuoter)new OracleQuoter();
+        }
 
-        public override string RenameTable { get { return "ALTER TABLE {0} RENAME TO {1}"; } }
 
-        public override string InsertData { get { return "INTO {0} ({1}) VALUES ({2})"; } }
+        public override string DropTable
+        {
+            get
+            {
+                return "DROP TABLE {0}";
+            }
+        }
+        public override string Generate(DeleteTableExpression expression)
+        {
+            return String.Format(DropTable, ExpandTableName(Quoter.QuoteTableName(expression.SchemaName),Quoter.QuoteTableName(expression.TableName)));
+        }
 
-        //public override string Generate(CreateTableExpression expression)
-        //{
-        //    return String.Format("CREATE TABLE {0} ({1})", expression.TableName, Column.Generate(expression));
-        //}
+        public override string Generate(CreateSequenceExpression expression)
+        {
+            var result = new StringBuilder(string.Format("CREATE SEQUENCE "));
+            var seq = expression.Sequence;
+            if (string.IsNullOrEmpty(seq.SchemaName))
+            {
+                result.AppendFormat(Quoter.QuoteSequenceName(seq.Name));
+            }
+            else
+            {
+                result.AppendFormat("{0}.{1}", Quoter.QuoteSchemaName(seq.SchemaName), Quoter.QuoteSequenceName(seq.Name));
+            }
 
-        //public override string Generate(CreateColumnExpression expression)
-        //{
-        //    return String.Format("ALTER TABLE {0} ADD {1}", expression.TableName, Column.Generate(expression.Column));
-        //}
+            if (seq.Increment.HasValue)
+            {
+                result.AppendFormat(" INCREMENT BY {0}", seq.Increment);
+            }
 
-        //public override string Generate(DeleteTableExpression expression)
-        //{
-        //    return String.Format("DROP TABLE {0}", expression.TableName);
-        //}
+            if (seq.MinValue.HasValue)
+            {
+                result.AppendFormat(" MINVALUE {0}", seq.MinValue);
+            }
 
-        //public override string Generate(DeleteColumnExpression expression)
-        //{
+            if (seq.MaxValue.HasValue)
+            {
+                result.AppendFormat(" MAXVALUE {0}", seq.MaxValue);
+            }
 
-        //    return String.Format("ALTER TABLE {0} DROP COLUMN {1}", expression.TableName, expression.ColumnName);
-        //}
+            if (seq.StartWith.HasValue)
+            {
+                result.AppendFormat(" START WITH {0}", seq.StartWith);
+            }
 
-        //public override string Generate(CreateForeignKeyExpression expression)
-        //{
-        //    //string primaryColumns = GetColumnList(expression.ForeignKey.PrimaryColumns);
-        //    //string foreignColumns = GetColumnList(expression.ForeignKey.ForeignColumns);
+            if (seq.Cache.HasValue)
+            {
+                result.AppendFormat(" CACHE {0}", seq.Cache);
+            }
 
-        //    string sql = "ALTER TABLE {0} ADD CONSTRAINT {1} FOREIGN KEY ({2}) REFERENCES {3} ({4}){5}";
+            if (seq.Cycle)
+            {
+                result.Append(" CYCLE");
+            }
 
-        //    return String.Format(sql,
-        //                    expression.ForeignKey.ForeignTable,
-        //                    expression.ForeignKey.Name,
-        //                    //foreignColumns,
-        //                    expression.ForeignKey.PrimaryTable,
-        //                    //primaryColumns,
-        //                    FormatCascade("DELETE", expression.ForeignKey.OnDelete)
-        //                    );
-        //}
+            return result.ToString();
+        }
 
-        //public override string Generate(DeleteForeignKeyExpression expression)
-        //{
-        //    string sql = "ALTER TABLE {0} DROP CONSTRAINT {1}";
-        //    return String.Format(sql, expression.ForeignKey.ForeignTable, expression.ForeignKey.Name);
-        //}
+        public override string AddColumn
+        {
+            get { return "ALTER TABLE {0} ADD {1}"; }
+        }
 
-        //public override string Generate(CreateIndexExpression expression)
-        //{
-        //    var result = new StringBuilder("CREATE");
-        //    if (expression.Index.IsUnique)
-        //        result.Append(" UNIQUE");
+        public override string AlterColumn
+        {
+            get { return "ALTER TABLE {0} MODIFY {1}"; }
+        }
 
-        //    //if (expression.Index.IsClustered)
-        //    //    result.Append(" CLUSTERED");
-        //    //else
-        //    //    result.Append(" NONCLUSTERED");
+        public override string RenameTable
+        {
+            get { return "ALTER TABLE {0} RENAME TO {1}"; }
+        }
 
-        //    result.Append(" INDEX {0} ON {1} (");
+        public override string InsertData
+        {
+            get { return "INTO {0} ({1}) VALUES ({2})"; }
+        }
 
-        //    bool first = true;
-        //    foreach (IndexColumnDefinition column in expression.Index.Columns)
-        //    {
-        //        if (first)
-        //            first = false;
-        //        else
-        //            result.Append(",");
+        private string ExpandTableName(string schema, string table)
+        { 
+            return String.IsNullOrEmpty(schema) ? table : String.Concat(schema,".",table);
+        }
 
-        //        result.Append(column.Name);
-        //        if (column.Direction == Direction.Ascending)
-        //        {
-        //            result.Append(" ASC");
-        //        }
-        //        else
-        //        {
-        //            result.Append(" DESC");
-        //        }
-        //    }
-        //    result.Append(")");
+         private string innerGenerate(CreateTableExpression expression)
+        {
+            var tableName = Quoter.QuoteTableName(expression.TableName);
+            var schemaName = Quoter.QuoteSchemaName(expression.SchemaName);
+             
+            return string.Format("CREATE TABLE {0} ({1})",ExpandTableName(schemaName,tableName), Column.Generate(expression.Columns, tableName));
+        }
 
-        //    return String.Format(result.ToString(), expression.Index.Name, expression.Index.TableName);
-        //}
 
-        //public override string Generate(DeleteIndexExpression expression)
-        //{
-        //    return String.Format("DROP INDEX {0}", expression.Index.Name, expression.Index.TableName);
-        //}
+        public override string Generate(CreateTableExpression expression)
+        {
+            var descriptionStatements = DescriptionGenerator.GenerateDescriptionStatements(expression);
+            var statements = descriptionStatements as string[] ?? descriptionStatements.ToArray();
 
-        //public override string Generate(RenameTableExpression expression)
-        //{
-        //    return String.Format("ALTER TABLE {0} RENAME TO {1}", expression.OldName, expression.NewName);
-        //}
+            if (!statements.Any())
+                return innerGenerate(expression);
 
-        //public override string Generate(RenameColumnExpression expression)
-        //{
-        //    return String.Format("ALTER TABLE {0} RENAME COLUMN {1} TO {2}", expression.TableName, expression.OldName, expression.NewName);
-        //}
+            var wrappedCreateTableStatement = WrapStatementInExecuteImmediateBlock(innerGenerate(expression));
+            var createTableWithDescriptionsBuilder = new StringBuilder(wrappedCreateTableStatement);
+
+            foreach (var descriptionStatement in statements)
+            {
+                if (!string.IsNullOrEmpty(descriptionStatement))
+                {
+                    var wrappedStatement = WrapStatementInExecuteImmediateBlock(descriptionStatement);
+                    createTableWithDescriptionsBuilder.Append(wrappedStatement);
+                }
+            }
+
+            return WrapInBlock(createTableWithDescriptionsBuilder.ToString());
+        }
+
+        public override string Generate(AlterTableExpression expression)
+        {
+            var descriptionStatement = DescriptionGenerator.GenerateDescriptionStatement(expression);
+
+            if (string.IsNullOrEmpty(descriptionStatement))
+                return base.Generate(expression);
+
+            return descriptionStatement;
+        }
+
+        public override string Generate(CreateColumnExpression expression)
+        {
+            var descriptionStatement = DescriptionGenerator.GenerateDescriptionStatement(expression);
+
+            if (string.IsNullOrEmpty(descriptionStatement))
+                return base.Generate(expression);
+
+            var wrappedCreateColumnStatement = WrapStatementInExecuteImmediateBlock(base.Generate(expression));
+
+            var createColumnWithDescriptionBuilder = new StringBuilder(wrappedCreateColumnStatement);
+            createColumnWithDescriptionBuilder.Append(WrapStatementInExecuteImmediateBlock(descriptionStatement));
+
+            return WrapInBlock(createColumnWithDescriptionBuilder.ToString());
+        }
+
+        public override string Generate(AlterColumnExpression expression)
+        {
+            var descriptionStatement = DescriptionGenerator.GenerateDescriptionStatement(expression);
+
+            if (string.IsNullOrEmpty(descriptionStatement))
+                return base.Generate(expression);
+
+            var wrappedAlterColumnStatement = WrapStatementInExecuteImmediateBlock(base.Generate(expression));
+
+            var alterColumnWithDescriptionBuilder = new StringBuilder(wrappedAlterColumnStatement);
+            alterColumnWithDescriptionBuilder.Append(WrapStatementInExecuteImmediateBlock(descriptionStatement));
+
+            return WrapInBlock(alterColumnWithDescriptionBuilder.ToString());
+        }
 
         public override string Generate(InsertDataExpression expression)
         {
@@ -155,113 +202,45 @@ namespace FluentMigrator.Runner.Generators.Oracle
 
                 string columns = String.Join(", ", columnNames.ToArray());
                 string values = String.Join(", ", columnValues.ToArray());
-                insertStrings.Add(String.Format(InsertData, Quoter.QuoteTableName(expression.TableName), columns, values));
+                insertStrings.Add(String.Format(InsertData, ExpandTableName(Quoter.QuoteSchemaName(expression.SchemaName), Quoter.QuoteTableName(expression.TableName)), columns, values));
             }
             return "INSERT ALL " + String.Join(" ", insertStrings.ToArray()) + " SELECT 1 FROM DUAL";
         }
 
-
-        //public override string Generate(UpdateDataExpression expression)
-        //{
-        //    var result = new StringBuilder();
-
-        //    var set = String.Empty;
-        //    var i = 0;
-        //    foreach (var item in expression.Set)
-        //    {
-        //        if (i != 0)
-        //        {
-        //            set += ", ";
-        //        }
-
-        //        set += String.Format("[{0}] = {1}", item.Key, Constant.Format(item.Value));
-        //        i++;
-        //    }
-
-        //    var where = String.Empty;
-        //    i = 0;
-        //    foreach (var item in expression.Where)
-        //    {
-        //        if (i != 0)
-        //        {
-        //            where += " AND ";
-        //        }
-
-        //        where += String.Format("[{0}] {1} {2}", item.Key, item.Value == null ? "IS" : "=", Constant.Format(item.Value));
-        //        i++;
-        //    }
-
-        //    result.Append(String.Format("UPDATE [{0}] SET {1} WHERE {2};", expression.TableName, set, where));
-
-        //    return result.ToString();
-        //}
-
-        //public override string Generate(DeleteDataExpression expression)
-        //{
-        //    var result = new StringBuilder();
-        //    foreach (var row in expression.Rows)
-        //    {
-        //        var where = String.Empty;
-        //        var i = 0;
-
-        //        foreach (var item in row)
-        //        {
-        //            if (i != 0)
-        //            {
-        //                where += " AND ";
-        //            }
-
-        //            where += String.Format("{0} {1} {2}", item.Key, item.Value == null ? "IS" : "=", Constant.Format(item.Value));
-        //            i++;
-        //        }
-
-        //        result.Append(String.Format("DELETE FROM {0} WHERE {1}", expression.TableName, where));
-        //    }
-        //    return result.ToString();
-        //}
-
         public override string Generate(AlterDefaultConstraintExpression expression)
         {
-            throw new NotImplementedException();
+            return String.Format(AlterColumn, Quoter.QuoteTableName(expression.TableName), Column.Generate(new ColumnDefinition
+            {
+                ModificationType = ColumnModificationType.Alter,
+                Name = expression.ColumnName,
+                DefaultValue = expression.DefaultValue
+            }));
         }
 
-        //private string GetColumnList(IEnumerable<string> columns)
-        //{
-        //    string result = "";
-        //    foreach (string column in columns)
-        //    {
-        //        result += column + ",";
-        //    }
-        //    return result.TrimEnd(',');
-        //}
+        public override string Generate(DeleteDefaultConstraintExpression expression)
+        {
+            return Generate(new AlterDefaultConstraintExpression
+            {
+                TableName = expression.TableName,
+                ColumnName = expression.ColumnName,
+                DefaultValue = null
+            });
+        }
 
-        //private string GetDataList(List<object> data)
-        //{
-        //    string result = "";
-        //    foreach (object column in data)
-        //    {
-        //        result += Constant.Format(column) + ",";
-        //    }
-        //    return result.TrimEnd(',');
-        //}
+        private string WrapStatementInExecuteImmediateBlock(string statement)
+        {
+            if (string.IsNullOrEmpty(statement))
+                return string.Empty;
 
-        //protected string FormatCascade(string onWhat, Rule rule)
-        //{
-        //    string action = "NO ACTION";
-        //    switch (rule)
-        //    {
-        //        case Rule.None:
-        //        case Rule.SetDefault:
-        //            return "";
-        //        case Rule.Cascade:
-        //            action = "CASCADE";
-        //            break;
-        //        case Rule.SetNull:
-        //            action = "SET NULL";
-        //            break;
-        //    }
+            return string.Format("EXECUTE IMMEDIATE '{0}';", FormatHelper.FormatSqlEscape(statement));
+        }
 
-        //    return string.Format(" ON {0} {1}", onWhat, action);
-        //}
+        private string WrapInBlock(string sql)
+        {
+            if (string.IsNullOrEmpty(sql))
+                return string.Empty;
+
+            return string.Format("BEGIN {0} END;", sql);
+        }
     }
 }

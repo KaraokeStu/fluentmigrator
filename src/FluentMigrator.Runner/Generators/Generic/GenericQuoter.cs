@@ -1,6 +1,5 @@
-﻿
-
-using System.Globalization;
+﻿using System.Globalization;
+using FluentMigrator.Model;
 
 namespace FluentMigrator.Runner.Generators.Generic
 {
@@ -10,21 +9,44 @@ namespace FluentMigrator.Runner.Generators.Generic
     {
         public virtual string QuoteValue(object value)
         {
-            if (value == null) { return FormatNull(); }
+            if (value == null || value is DBNull) { return FormatNull(); }
 
             string stringValue = value as string;
             if (stringValue != null) { return FormatString(stringValue); }
+
+            if (value is ExplicitUnicodeString)
+            {
+                return FormatString(value.ToString());
+            }
 
             if (value is char) { return FormatChar((char)value); }
             if (value is bool) { return FormatBool((bool)value); }
             if (value is Guid) { return FormatGuid((Guid)value); }
             if (value is DateTime) { return FormatDateTime((DateTime)value); }
+            if (value is DateTimeOffset) { return FormatDateTimeOffset((DateTimeOffset)value); }
             if (value.GetType().IsEnum) { return FormatEnum(value); }
             if (value is double) {return FormatDouble((double)value);}
             if (value is float) {return FormatFloat((float)value);}
             if (value is decimal) { return FormatDecimal((decimal)value); }
+            if (value is RawSql) { return ((RawSql) value).Value; }
+            if (value is byte[]) { return FormatByteArray((byte[])value); }
+            if (value is TimeSpan) { return FromTimeSpan((TimeSpan)value); }
             
-            return value.ToString();
+			return value.ToString();
+        }
+
+        public virtual string FromTimeSpan(TimeSpan value)
+        {
+            return ValueQuote + value.ToString() + ValueQuote;
+        }
+
+        protected virtual string FormatByteArray(byte[] value)
+        {
+            var hex = new System.Text.StringBuilder((value.Length * 2)+2);
+            hex.Append("0x");
+            foreach (byte b in value)
+                hex.AppendFormat("{0:x2}", b);
+            return hex.ToString();
         }
 
         private string FormatDecimal(decimal value)
@@ -69,7 +91,12 @@ namespace FluentMigrator.Runner.Generators.Generic
 
         public virtual string FormatDateTime(DateTime value)
         {
-            return ValueQuote + (value).ToString("yyyy-MM-ddTHH:mm:ss") + ValueQuote;
+            return ValueQuote + (value).ToString("yyyy-MM-ddTHH:mm:ss",CultureInfo.InvariantCulture) + ValueQuote;
+        }
+
+        public virtual string FormatDateTimeOffset(DateTimeOffset value) 
+        {
+            return ValueQuote + (value).ToString("yyyy-MM-ddTHH:mm:ss zzz", CultureInfo.InvariantCulture) + ValueQuote;
         }
 
         public virtual string FormatEnum(object value)
@@ -101,6 +128,7 @@ namespace FluentMigrator.Runner.Generators.Generic
         /// </summary>
         public virtual bool IsQuoted(string name)
         {
+            if (String.IsNullOrEmpty(name)) return false;
             //This can return true incorrectly in some cases edge cases.
             //If a string say [myname]] is passed in this is not correctly quote for MSSQL but this function will
             //return true. 
@@ -149,6 +177,14 @@ namespace FluentMigrator.Runner.Generators.Generic
         public virtual string QuoteColumnName(string columnName)
         {
             return IsQuoted(columnName) ? columnName : Quote(columnName);
+        }
+
+        /// <summary>
+        /// Quotes a constraint name
+        /// </summary>
+        public virtual string QuoteConstraintName(string constraintName)
+        {
+            return IsQuoted(constraintName) ? constraintName : Quote(constraintName);
         }
 
         /// <summary>

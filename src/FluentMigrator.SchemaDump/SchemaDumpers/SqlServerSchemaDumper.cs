@@ -17,11 +17,8 @@
 //
 #endregion
 
-using System;
-using System.Data;
-using System.Data.SqlClient;
 using System.Collections.Generic;
-using System.IO;
+using System.Data;
 using System.Linq;
 using FluentMigrator.Builders.Execute;
 using FluentMigrator.Model;
@@ -30,61 +27,57 @@ using FluentMigrator.Runner.Processors.SqlServer;
 
 namespace FluentMigrator.SchemaDump.SchemaDumpers
 {
-	public class SqlServerSchemaDumper : ISchemaDumper
-	{
+    public class SqlServerSchemaDumper : ISchemaDumper
+    {
         public virtual IAnnouncer Announcer { get; set; }
         public SqlServerProcessor Processor { get; set; }
-		public bool WasCommitted { get; private set; }
 
         public SqlServerSchemaDumper(SqlServerProcessor processor, IAnnouncer announcer)
-		{
-            this.Announcer = announcer;
-            this.Processor = processor;
-		}		
-
-		public virtual void Execute(string template, params object[] args)
-		{
-            Processor.Execute(template, args);
-		}
-
-        public virtual bool Exists(string template, params object[] args)
-		{
-            return Processor.Exists(template, args);
-		}
-
-        public virtual DataSet ReadTableData(string tableName)
-		{
-            return Processor.Read("SELECT * FROM [{0}]", tableName);
-		}
-
-        public virtual DataSet Read(string template, params object[] args)
-		{
-            return Processor.Read(template, args);
-		}        
-
-        public virtual void Process(PerformDBOperationExpression expression)
-		{
-            Processor.Process(expression);
-		}
-
-        protected string FormatSqlEscape(string sql)
         {
-            return sql.Replace("'", "''");
+            Announcer = announcer;
+            Processor = processor;
         }
 
-        public virtual IList<TableDefinition> ReadDbSchema() {
+        public virtual void Execute(string template, params object[] args)
+        {
+            Processor.Execute(template, args);
+        }
+
+        public virtual bool Exists(string template, params object[] args)
+        {
+            return Processor.Exists(template, args);
+        }
+
+        public virtual DataSet ReadTableData(string tableName)
+        {
+            return Processor.Read("SELECT * FROM [{0}]", tableName);
+        }
+
+        public virtual DataSet Read(string template, params object[] args)
+        {
+            return Processor.Read(template, args);
+        }
+
+        public virtual void Process(PerformDBOperationExpression expression)
+        {
+            Processor.Process(expression);
+        }
+
+        public virtual IList<TableDefinition> ReadDbSchema()
+        {
             IList<TableDefinition> tables = ReadTables();
-            foreach(TableDefinition table in tables)
+            foreach (TableDefinition table in tables)
             {
                 table.Indexes = ReadIndexes(table.SchemaName, table.Name);
                 table.ForeignKeys = ReadForeignKeys(table.SchemaName, table.Name);
             }
 
-            return tables as IList<TableDefinition>;
+            return tables;
         }
 
-        protected virtual IList<FluentMigrator.Model.TableDefinition> ReadTables() {
-            string query = @"SELECT OBJECT_SCHEMA_NAME(t.[object_id],DB_ID()) AS [Schema], t.name AS [Table], 
+        protected virtual IList<TableDefinition> ReadTables()
+        {
+            const string query = @"SELECT OBJECT_SCHEMA_NAME(t.[object_id],DB_ID()) AS [Schema], t.name AS [Table], 
                 c.[Name] AS ColumnName,
                 t.object_id AS [TableID],
                 c.column_id AS [ColumnID],
@@ -108,24 +101,26 @@ namespace FluentMigrator.SchemaDump.SchemaDumpers
                 LEFT JOIN sys.default_constraints def ON c.default_object_id = def.object_id
                 LEFT JOIN sys.key_constraints pk ON t.object_id = pk.parent_object_id AND pk.type = 'PK'
                 LEFT JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu ON t.name = kcu.TABLE_NAME AND c.name = kcu.COLUMN_NAME AND pk.name = kcu.CONSTRAINT_NAME
-                ORDER BY t.name, c.name";
+                ORDER BY t.name, c.column_id";
             DataSet ds = Read(query);
             DataTable dt = ds.Tables[0];
             IList<TableDefinition> tables = new List<TableDefinition>();
 
-            foreach (DataRow dr in dt.Rows) {
+            foreach (DataRow dr in dt.Rows)
+            {
                 List<TableDefinition> matches = (from t in tables
-                            where t.Name == dr["Table"].ToString()
-                            && t.SchemaName == dr["Schema"].ToString()
-                            select t).ToList();
+                                                 where t.Name == dr["Table"].ToString()
+                                                 && t.SchemaName == dr["Schema"].ToString()
+                                                 select t).ToList();
 
                 TableDefinition tableDef = null;
                 if (matches.Count > 0) tableDef = matches[0];
 
                 // create the table if not found
-                if (tableDef == null) {
-                    tableDef = new TableDefinition()
-                    {
+                if (tableDef == null)
+                {
+                    tableDef = new TableDefinition
+                                   {
                         Name = dr["Table"].ToString(),
                         SchemaName = dr["Schema"].ToString()
                     };
@@ -133,28 +128,31 @@ namespace FluentMigrator.SchemaDump.SchemaDumpers
                 }
                 //find the column
                 List<ColumnDefinition> cmatches = (from c in tableDef.Columns
-                                           where c.Name == dr["ColumnName"].ToString()
-                                           select c).ToList();
+                                                   where c.Name == dr["ColumnName"].ToString()
+                                                   select c).ToList();
                 ColumnDefinition colDef = null;
                 if (cmatches.Count > 0) colDef = cmatches[0];
 
-                if (colDef == null) {
+                if (colDef == null)
+                {
                     //need to create and add the column
-                    tableDef.Columns.Add( new ColumnDefinition() { 
+                    tableDef.Columns.Add(new ColumnDefinition
+                                             {
                         Name = dr["ColumnName"].ToString(),
                         CustomType = "", //TODO: set this property
                         DefaultValue = dr.IsNull("DefaultValue") ? "" : dr["DefaultValue"].ToString(),
                         IsForeignKey = dr["IsForeignKey"].ToString() == "1",
-                        IsIdentity = dr["IsIdentity"].ToString() == "1",
+                        IsIdentity = dr["IsIdentity"].ToString() == "True",
                         IsIndexed = dr["IsIndexed"].ToString() == "1",
-                        IsNullable = dr["IsNullable"].ToString() == "1",
+                        IsNullable = dr["IsNullable"].ToString() == "True",
                         IsPrimaryKey = dr["IsPrimaryKey"].ToString() == "1",
                         IsUnique = dr["IsUnique"].ToString() == "1",
                         Precision = int.Parse(dr["Precision"].ToString()),
-                        PrimaryKeyName = dr.IsNull("PrimaryKeyName") ? "" : dr["PrimaryKeyName"].ToString(), 
+                        PrimaryKeyName = dr.IsNull("PrimaryKeyName") ? "" : dr["PrimaryKeyName"].ToString(),
                         Size = int.Parse(dr["Length"].ToString()),
                         TableName = dr["Table"].ToString(),
-                        Type = GetDbType(int.Parse(dr["TypeID"].ToString())) //TODO: set this property
+                        Type = GetDbType(int.Parse(dr["TypeID"].ToString())), //TODO: set this property
+                        ModificationType = ColumnModificationType.Create
                     });
                 }
             }
@@ -164,65 +162,58 @@ namespace FluentMigrator.SchemaDump.SchemaDumpers
 
         protected virtual DbType GetDbType(int typeNum)
         {
-            switch (typeNum)
+            var types = new Dictionary<int, DbType>()
             {
-                case 34: //'byte[]'
-                    return DbType.Byte;
-                case 35: //'string'
-                    return DbType.String;
-                case 36: //'System.Guid'
-                    return DbType.Guid;
-                case 48: //'byte'
-                    return DbType.Byte;
-                case 52: //'short'
-                    return DbType.Int16;
-                case 56: //'int'
-                    return DbType.Int32;
-                case 58: //'System.DateTime'
-                    return DbType.DateTime;
-                case 59: //'float'
-                    return DbType.Int64;
-                case 60: //'decimal'
-                    return DbType.Decimal;
-                case 61: //'System.DateTime'
-                    return DbType.DateTime;
-                case 62: //'double'
-                    return DbType.Double;
-                case 98: //'object'
-                    return DbType.Object;
-                case 99: //'string'
-                    return DbType.String;
-                case 104: //'bool'
-                    return DbType.Boolean;
-                case 106: //'decimal'
-                    return DbType.Decimal;
-                case 108: //'decimal'
-                    return DbType.Decimal;
-                case 122: //'decimal'
-                    return DbType.Decimal;
-                case 127: //'long'
-                    return DbType.Int64;
-                case 165: //'byte[]'
-                    return DbType.Byte;
-                case 167: //'string'
-                    return DbType.String;
-                case 173: //'byte[]'
-                    return DbType.Byte;
-                case 175: //'string'
-                    return DbType.String;
-                case 189: //'long'
-                    return DbType.Int64;
-                case 231: //'string'
-                case 239: //'string'
-                case 241: //'string'
-                default:
-                    return DbType.String;
+                {34, DbType.Binary},
+                {35, DbType.AnsiString},
+                {36, DbType.Guid},
+                {40, DbType.Date},
+                {41, DbType.Time},
+                {42, DbType.DateTime2},
+                {43, DbType.DateTimeOffset},
+                {48, DbType.Byte},
+                {52, DbType.Int16},
+                {56, DbType.Int32},
+                //{58, DbType.}, //smalldatetime
+                {59, DbType.Single},
+                {60, DbType.Currency},
+                {61, DbType.DateTime},
+                {62, DbType.Double},
+                //{98, DbType.}, //sql_variant
+                {99, DbType.String},
+                {104, DbType.Boolean},
+                {106, DbType.Decimal},
+                //{108, DbType.}, //numeric
+                //{122, DbType.}, //smallmoney
+                {127, DbType.Int64},
+                //{240, DbType.}, //hierarchyid
+                //{240, DbType.}, //geometry
+                //{240, DbType.}, //geography
+                {165, DbType.Binary},
+                {167, DbType.AnsiString},
+                {173, DbType.Binary},
+                {175, DbType.AnsiStringFixedLength},
+                //{189, DbType.}, //Timestamp
+                {231, DbType.String},
+                {239, DbType.StringFixedLength},
+                {241, DbType.Xml}
+                //{231, DbType.} //Sysname
+            };
+
+            DbType value;
+            if (types.TryGetValue(typeNum, out value))
+            {
+                return value;
+            }
+            else
+            {
+                throw new KeyNotFoundException(typeNum + " was not found!");
             }
         }
 
-        protected virtual IList<IndexDefinition> ReadIndexes(string schemaName, string tableName) 
+        protected virtual IList<IndexDefinition> ReadIndexes(string schemaName, string tableName)
         {
-            string query = @"SELECT OBJECT_SCHEMA_NAME(T.[object_id],DB_ID()) AS [Schema],  
+            const string query = @"SELECT OBJECT_SCHEMA_NAME(T.[object_id],DB_ID()) AS [Schema],  
               T.[name] AS [table_name], I.[name] AS [index_name], AC.[name] AS [column_name],  
               I.[type_desc], I.[is_unique], I.[data_space_id], I.[ignore_dup_key], I.[is_primary_key], 
               I.[is_unique_constraint], I.[fill_factor],    I.[is_padded], I.[is_disabled], I.[is_hypothetical], 
@@ -238,7 +229,7 @@ namespace FluentMigrator.SchemaDump.SchemaDumpers
             DataTable dt = ds.Tables[0];
             IList<IndexDefinition> indexes = new List<IndexDefinition>();
 
-            foreach (DataRow dr in dt.Rows) 
+            foreach (DataRow dr in dt.Rows)
             {
                 List<IndexDefinition> matches = (from i in indexes
                                                  where i.Name == dr["index_name"].ToString()
@@ -249,45 +240,46 @@ namespace FluentMigrator.SchemaDump.SchemaDumpers
                 if (matches.Count > 0) iDef = matches[0];
 
                 // create the table if not found
-                if (iDef == null) {
-                    iDef = new IndexDefinition()
-                    {
+                if (iDef == null)
+                {
+                    iDef = new IndexDefinition
+                               {
                         Name = dr["index_name"].ToString(),
                         SchemaName = dr["Schema"].ToString(),
-                        IsClustered = dr["type_desc"].ToString()=="CLUSTERED",
+                        IsClustered = dr["type_desc"].ToString() == "CLUSTERED",
                         IsUnique = dr["is_unique"].ToString() == "1",
                         TableName = dr["table_name"].ToString()
                     };
                     indexes.Add(iDef);
                 }
 
-                ICollection<IndexColumnDefinition> ms;
                 // columns
-                ms = (from m in iDef.Columns
-                      where m.Name == dr["column_name"].ToString()
-                      select m).ToList();
-                if (ms.Count == 0) 
+                ICollection<IndexColumnDefinition> ms = (from m in iDef.Columns
+                                  where m.Name == dr["column_name"].ToString()
+                                  select m).ToList();
+                if (ms.Count == 0)
                 {
-                    iDef.Columns.Add(new IndexColumnDefinition() {
+                    iDef.Columns.Add(new IndexColumnDefinition
+                                         {
                         Name = dr["column_name"].ToString(),
-                        Direction = dr["is_descending_key"].ToString()=="1" ? Direction.Descending : Direction.Ascending
-                    });                    
+                        Direction = dr["is_descending_key"].ToString() == "1" ? Direction.Descending : Direction.Ascending
+                    });
                 }
             }
 
             return indexes;
         }
 
-        protected virtual IList<ForeignKeyDefinition> ReadForeignKeys(string schemaName, string tableName) 
+        protected virtual IList<ForeignKeyDefinition> ReadForeignKeys(string schemaName, string tableName)
         {
-            string query = @"SELECT C.CONSTRAINT_SCHEMA AS Contraint_Schema, 
+            const string query = @"SELECT C.CONSTRAINT_SCHEMA AS Contraint_Schema, 
                     C.CONSTRAINT_NAME AS Constraint_Name,
-	                FK.CONSTRAINT_SCHEMA AS ForeignTableSchema,
-	                FK.TABLE_NAME AS FK_Table,
-	                CU.COLUMN_NAME AS FK_Column,
-	                PK.CONSTRAINT_SCHEMA as PrimaryTableSchema,
-	                PK.TABLE_NAME AS PK_Table,
-	                PT.COLUMN_NAME AS PK_Column
+                    FK.CONSTRAINT_SCHEMA AS ForeignTableSchema,
+                    FK.TABLE_NAME AS FK_Table,
+                    CU.COLUMN_NAME AS FK_Column,
+                    PK.CONSTRAINT_SCHEMA as PrimaryTableSchema,
+                    PK.TABLE_NAME AS PK_Table,
+                    PT.COLUMN_NAME AS PK_Column
                 FROM INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS C
                 INNER JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS FK ON C.CONSTRAINT_NAME = FK.CONSTRAINT_NAME
                 INNER JOIN INFORMATION_SCHEMA.TABLE_CONSTRAINTS PK ON C.UNIQUE_CONSTRAINT_NAME = PK.CONSTRAINT_NAME
@@ -305,7 +297,8 @@ namespace FluentMigrator.SchemaDump.SchemaDumpers
             DataTable dt = ds.Tables[0];
             IList<ForeignKeyDefinition> keys = new List<ForeignKeyDefinition>();
 
-            foreach (DataRow dr in dt.Rows) {
+            foreach (DataRow dr in dt.Rows)
+            {
                 List<ForeignKeyDefinition> matches = (from i in keys
                                                       where i.Name == dr["Constraint_Name"].ToString()
                                                       select i).ToList();
@@ -314,9 +307,10 @@ namespace FluentMigrator.SchemaDump.SchemaDumpers
                 if (matches.Count > 0) d = matches[0];
 
                 // create the table if not found
-                if (d == null) {
-                    d = new ForeignKeyDefinition()
-                    {
+                if (d == null)
+                {
+                    d = new ForeignKeyDefinition
+                            {
                         Name = dr["Constraint_Name"].ToString(),
                         ForeignTableSchema = dr["ForeignTableSchema"].ToString(),
                         ForeignTable = dr["FK_Table"].ToString(),
@@ -326,21 +320,20 @@ namespace FluentMigrator.SchemaDump.SchemaDumpers
                     keys.Add(d);
                 }
 
-                ICollection<string> ms;
                 // Foreign Columns
-                ms = (from m in d.ForeignColumns
-                           where m == dr["FK_Table"].ToString()
-                           select m).ToList();
-                if (ms.Count == 0) d.ForeignColumns.Add(dr["FK_Table"].ToString());
+                ICollection<string> ms = (from m in d.ForeignColumns
+                                  where m == dr["FK_Table"].ToString()
+                                  select m).ToList();
+                if (ms.Count == 0) d.ForeignColumns.Add(dr["FK_Column"].ToString());
 
                 // Primary Columns
                 ms = (from m in d.PrimaryColumns
-                           where m == dr["PK_Table"].ToString()
-                           select m).ToList();
-                if (ms.Count == 0) d.PrimaryColumns.Add(dr["PK_Table"].ToString());
+                      where m == dr["PK_Table"].ToString()
+                      select m).ToList();
+                if (ms.Count == 0) d.PrimaryColumns.Add(dr["PK_Column"].ToString());
             }
 
             return keys;
         }
-	}
+    }
 }

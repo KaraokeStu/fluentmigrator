@@ -18,33 +18,43 @@
 
 using System;
 using System.Collections.Generic;
+using FluentMigrator.Infrastructure;
 using FluentMigrator.Model;
 using System.Linq;
 
 namespace FluentMigrator.Expressions
 {
-	public class DeleteIndexExpression : MigrationExpressionBase
-	{
-		public virtual IndexDefinition Index { get; set; }
+    public class DeleteIndexExpression : MigrationExpressionBase
+    {
+        public virtual IndexDefinition Index { get; set; }
 
-		public DeleteIndexExpression()
-		{
-			Index = new IndexDefinition();
-		}
+        public DeleteIndexExpression()
+        {
+            Index = new IndexDefinition();
+        }
 
-		public override void CollectValidationErrors(ICollection<string> errors)
-		{
-			Index.CollectValidationErrors(errors);
-		}
+        public override void ApplyConventions(IMigrationConventions conventions)
+        {
+            Index.ApplyConventions(conventions);
+        }
 
-		public override void ExecuteWith(IMigrationProcessor processor)
-		{
-			processor.Process(this);
-		}
+        public override void CollectValidationErrors(ICollection<string> errors)
+        {
+            if (String.IsNullOrEmpty(Index.Name))
+                errors.Add(ErrorMessages.IndexNameCannotBeNullOrEmpty);
 
-		public override string ToString()
-		{
-			return base.ToString() + Index.TableName + " (" + string.Join(", ", Index.Columns.Select(x => x.Name).ToArray()) + ")";
-		}
-	}
+            if (String.IsNullOrEmpty(Index.TableName))
+                errors.Add(ErrorMessages.TableNameCannotBeNullOrEmpty);
+        }
+
+        public override void ExecuteWith(IMigrationProcessor processor)
+        {
+            processor.Process(this);
+        }
+
+        public override string ToString()
+        {
+            return base.ToString() + Index.TableName + " (" + string.Join(", ", Index.Columns.Select(x => x.Name).ToArray()) + ")";
+        }
+    }
 }

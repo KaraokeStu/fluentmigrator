@@ -1,4 +1,4 @@
-﻿#region License
+#region License
 // 
 // Copyright (c) 2007-2009, Sean Chambers <schambers80@gmail.com>
 // 
@@ -18,9 +18,10 @@
 
 namespace FluentMigrator.Builders.Delete
 {
-	public interface IDeleteDataSyntax
-	{
-		IDeleteDataSyntax Row(object dataAsAnonymousType);
-		void AllRows();
-	}
+    public interface IDeleteDataSyntax
+    {
+        IDeleteDataSyntax Row(object dataAsAnonymousType);
+        void AllRows();
+        void IsNull(string columnName);
+    }
 }

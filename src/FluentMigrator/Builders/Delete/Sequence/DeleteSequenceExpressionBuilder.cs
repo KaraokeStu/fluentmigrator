@@ -1,11 +1,11 @@
-﻿namespace FluentMigrator.Builders.Delete.Sequence
+namespace FluentMigrator.Builders.Delete.Sequence
 {
     using Expressions;
 
-    public class DeleteSequenceExpressionBuilder : ExpressionBuilderBase<DeleteSequenceExpression>,
-												IInSchemaSyntax
+    public class DeleteSequenceExpressionBuilder : ExpressionBuilderBase<DeleteSequenceExpression>, IInSchemaSyntax
     {
-        public DeleteSequenceExpressionBuilder(DeleteSequenceExpression expression) : base(expression)
+        public DeleteSequenceExpressionBuilder(DeleteSequenceExpression expression)
+            : base(expression)
         {
         }
 

@@ -1,10 +1,11 @@
-﻿namespace FluentMigrator.Builders.Create.Sequence
+namespace FluentMigrator.Builders.Create.Sequence
 {
     using Expressions;
 
     public class CreateSequenceExpressionBuilder : ExpressionBuilderBase<CreateSequenceExpression>, ICreateSequenceSyntax, ICreateSequenceInSchemaSyntax
     {
-        public CreateSequenceExpressionBuilder(CreateSequenceExpression expression) : base(expression)
+        public CreateSequenceExpressionBuilder(CreateSequenceExpression expression)
+            : base(expression)
         {
         }
 

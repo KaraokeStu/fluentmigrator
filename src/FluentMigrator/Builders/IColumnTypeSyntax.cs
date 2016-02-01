@@ -16,38 +16,44 @@
 //
 #endregion
 
-using System;
 using FluentMigrator.Infrastructure;
 
 namespace FluentMigrator.Builders
 {
-	public interface IColumnTypeSyntax<TNext> : IFluentSyntax
-		where TNext : IFluentSyntax
-	{
-		TNext AsAnsiString();
-		TNext AsAnsiString(int size);
-	    TNext AsBinary();
-		TNext AsBinary(int size);
-		TNext AsBoolean();
-		TNext AsByte();
-		TNext AsCurrency();
-		TNext AsDate();
-		TNext AsDateTime();
-		TNext AsDecimal();
-		TNext AsDecimal(int size, int precision);
-		TNext AsDouble();
-		TNext AsGuid();
-		TNext AsFixedLengthString(int size);
-		TNext AsFixedLengthAnsiString(int size);
-		TNext AsFloat();
-		TNext AsInt16();
-		TNext AsInt32();
-		TNext AsInt64();
-		TNext AsString();
-		TNext AsString(int size);
-		TNext AsTime();
-		TNext AsXml();
-		TNext AsXml(int size);
-		TNext AsCustom(string customType);
-	}
+    public interface IColumnTypeSyntax<TNext> : IFluentSyntax
+        where TNext : IFluentSyntax
+    {
+        TNext AsAnsiString();
+        TNext AsAnsiString(string collationName);
+        TNext AsAnsiString(int size);
+        TNext AsAnsiString(int size, string collationName);
+        TNext AsBinary();
+        TNext AsBinary(int size);
+        TNext AsBoolean();
+        TNext AsByte();
+        TNext AsCurrency();
+        TNext AsDate();
+        TNext AsDateTime();
+        TNext AsDateTimeOffset();
+        TNext AsDecimal();
+        TNext AsDecimal(int size, int precision);
+        TNext AsDouble();
+        TNext AsGuid();
+        TNext AsFixedLengthString(int size);
+        TNext AsFixedLengthString(int size, string collationName);
+        TNext AsFixedLengthAnsiString(int size);
+        TNext AsFixedLengthAnsiString(int size, string collationName);
+        TNext AsFloat();
+        TNext AsInt16();
+        TNext AsInt32();
+        TNext AsInt64();
+        TNext AsString();
+        TNext AsString(string collationName);
+        TNext AsString(int size);
+        TNext AsString(int size, string collationName);
+        TNext AsTime();
+        TNext AsXml();
+        TNext AsXml(int size);
+        TNext AsCustom(string customType);
+    }
 }

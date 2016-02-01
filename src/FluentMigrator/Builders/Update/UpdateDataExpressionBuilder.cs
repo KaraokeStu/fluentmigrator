@@ -1,4 +1,4 @@
-﻿#region License
+#region License
 // 
 // Copyright (c) 2007-2009, Sean Chambers <schambers80@gmail.com>
 // 
@@ -18,24 +18,22 @@
 
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Data;
 using FluentMigrator.Expressions;
 using FluentMigrator.Infrastructure;
-using FluentMigrator.Model;
 
 namespace FluentMigrator.Builders.Update
 {
-	public class UpdateDataExpressionBuilder : IUpdateSetOrInSchemaSyntax,
-		IUpdateWhereSyntax
-	{
-	    private readonly UpdateDataExpression _expression;
-		private readonly IMigrationContext _context;
+    public class UpdateDataExpressionBuilder : IUpdateSetOrInSchemaSyntax,
+        IUpdateWhereSyntax
+    {
+        private readonly UpdateDataExpression _expression;
+        private readonly IMigrationContext _context;
 
-		public UpdateDataExpressionBuilder( UpdateDataExpression expression, IMigrationContext context )
-		{
-			_context = context;
-		    _expression = expression;
-		}
+        public UpdateDataExpressionBuilder(UpdateDataExpression expression, IMigrationContext context)
+        {
+            _context = context;
+            _expression = expression;
+        }
 
         public IUpdateSetSyntax InSchema(string schemaName)
         {
@@ -52,6 +50,11 @@ namespace FluentMigrator.Builders.Update
         public void Where(object dataAsAnonymousType)
         {
             _expression.Where = GetData(dataAsAnonymousType);
+        }
+
+        public void AllRows()
+        {
+            _expression.IsAllRows = true;
         }
 
         private static List<KeyValuePair<string, object>> GetData(object dataAsAnonymousType)
