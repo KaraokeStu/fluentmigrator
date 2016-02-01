@@ -120,21 +120,33 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\SolutionInfo.cs">
-      <Link>SolutionInfo.cs</Link>
+      <Link>Properties\SolutionInfo.cs</Link>
     </Compile>
+    <Compile Include="MigrationStage.cs" />
+    <Compile Include="MaintenanceAttribute.cs" />
     <Compile Include="Builders\Alter\AlterExpressionRoot.cs" />
     <Compile Include="Builders\Alter\Column\AlterColumnExpressionBuilder.cs" />
+    <Compile Include="Builders\Alter\Column\IAlterColumnOptionOrForeignKeyCascadeSyntax.cs" />
     <Compile Include="Builders\Alter\Column\IAlterColumnAsTypeOrInSchemaSyntax.cs" />
     <Compile Include="Builders\Alter\Column\IAlterColumnAsTypeSyntax.cs" />
     <Compile Include="Builders\Alter\Column\IAlterColumnOnTableSyntax.cs" />
     <Compile Include="Builders\Alter\Column\IAlterColumnOptionSyntax.cs" />
     <Compile Include="Builders\Alter\IAlterExpressionRoot.cs" />
     <Compile Include="Builders\Alter\Table\AlterTableExpressionBuilder.cs" />
+    <Compile Include="Builders\Alter\Table\IAlterTableAddColumnOrAlterColumnOrSchemaOrDescriptionSyntax.cs" />
+    <Compile Include="Builders\Alter\Table\IAlterTableColumnOptionOrAddColumnOrAlterColumnOrForeignKeyCascadeSyntax.cs" />
     <Compile Include="Builders\Alter\Table\IAlterTableAddColumnOrAlterColumnOrSchemaSyntax.cs" />
     <Compile Include="Builders\Alter\Table\IAlterTableAddColumOrAlterColumnSyntax.cs" />
     <Compile Include="Builders\Alter\Table\IAlterTableColumnAsTypeSyntax.cs" />
     <Compile Include="Builders\Alter\Table\IAlterTableColumnOptionOrAddColumnOrAlterColumnSyntax.cs" />
+    <Compile Include="Builders\Create\Column\ICreateColumnOptionOrForeignKeyCascadeSyntax.cs" />
     <Compile Include="Builders\Create\Column\ICreateColumnAsTypeOrInSchemaSyntax.cs" />
+    <Compile Include="Builders\Create\Constraint\CreateConstraintExpressionBuilder.cs" />
+    <Compile Include="Builders\Create\Constraint\ICreateConstraintColumnsSyntax.cs" />
+    <Compile Include="Builders\Create\Constraint\ICreateConstraintOnTableSyntax.cs" />
+    <Compile Include="Builders\Create\Constraint\ICreateConstraintOptionsSyntax.cs" />
+    <Compile Include="Builders\Create\Constraint\ICreateConstraintWithSchemaOrColumnSyntax.cs" />
+    <Compile Include="Builders\Create\Constraint\ICreateConstraintWithSchemaSyntax.cs" />
     <Compile Include="Builders\Create\ForeignKey\ICreateForeignKeyPrimaryColumnOrInSchemaSyntax.cs" />
     <Compile Include="Builders\Create\ForeignKey\ICreateForeignKeyForeignColumnOrInSchemaSyntax.cs" />
     <Compile Include="Builders\Create\ForeignKey\ICreateForeignKeyCascadeSyntax.cs" />
@@ -144,7 +156,15 @@
     <Compile Include="Builders\Create\Sequence\CreateSequenceExpressionBuilder.cs" />
     <Compile Include="Builders\Create\Sequence\ICreateSequenceInSchemaSyntax.cs" />
     <Compile Include="Builders\Create\Sequence\ICreateSequenceSyntax.cs" />
+    <Compile Include="Builders\Create\Table\ICreateTableColumnOptionOrForeignKeyCascadeOrWithColumnSyntax.cs" />
+    <Compile Include="Builders\Create\Table\ICreateTableWithColumnOrSchemaOrDescriptionSyntax.cs" />
     <Compile Include="Builders\Create\Table\ICreateTableWithColumnOrSchemaSyntax.cs" />
+    <Compile Include="Builders\Delete\Constraint\DeleteConstraintExpressionBuilder.cs" />
+    <Compile Include="Builders\Delete\Constraint\IDeleteConstraintOnTableSyntax.cs" />
+    <Compile Include="Builders\Delete\DefaultConstraint\DeleteDefaultConstraintExpressionBuilder.cs" />
+    <Compile Include="Builders\Delete\DefaultConstraint\IDeleteDefaultConstraintOnColumnOrInSchemaSyntax.cs" />
+    <Compile Include="Builders\Delete\DefaultConstraint\IDeleteDefaultConstraintOnColumnSyntax.cs" />
+    <Compile Include="Builders\Delete\DefaultConstraint\IDeleteDefaultConstraintOnTableSyntax.cs" />
     <Compile Include="Builders\Delete\DeleteDataExpressionBuilder.cs" />
     <Compile Include="Builders\Delete\ForeignKey\IDeleteForeignKeyForeignColumnOrInSchemaSyntax.cs" />
     <Compile Include="Builders\Delete\ForeignKey\IDeleteForeignKeyOnTableSyntax.cs" />
@@ -162,7 +182,26 @@
     <Compile Include="Builders\IfDatabase\IfDatabaseExpressionRoot.cs" />
     <Compile Include="Builders\IfDatabase\IIfDatabaseExpressionRoot.cs" />
     <Compile Include="Builders\IfDatabase\NullIfDatabaseProcessor.cs" />
+    <Compile Include="Builders\IForeignKeyCascadeSyntax.cs" />
     <Compile Include="Builders\IInSchemaSyntax.cs" />
+    <Compile Include="Builders\Schema\Constraint\ISchemaConstraintSyntax.cs" />
+    <Compile Include="Builders\Schema\Constraint\SchemaConstraintQuery.cs" />
+    <Compile Include="ExplicitUnicodeString.cs" />
+    <Compile Include="Exceptions\DatabaseOperationNotSupportedException.cs" />
+    <Compile Include="Exceptions\DuplicateMigrationException.cs" />
+    <Compile Include="Exceptions\FluentMigratorException.cs" />
+    <Compile Include="Exceptions\ProcessorFactoryNotFoundException.cs" />
+    <Compile Include="Exceptions\UndeterminableConnectionException.cs" />
+    <Compile Include="Helpers\LazyLoader.cs" />
+    <Compile Include="Builders\IColumnExpressionBuilder.cs" />
+    <Compile Include="Builders\ColumnExpressionBuilderHelper.cs" />
+    <Compile Include="Infrastructure\Extensions\ExtensionsForIMigrationInfo.cs" />
+    <Compile Include="Infrastructure\IAssemblyCollection.cs" />
+    <Compile Include="Infrastructure\IMigrationInfo.cs" />
+    <Compile Include="Infrastructure\MigrationInfo.cs" />
+    <Compile Include="Infrastructure\NonAttributedMigrationToMigrationInfoAdapter.cs" />
+    <Compile Include="RawSql.cs" />
+    <Compile Include="Infrastructure\ISupportAdditionalFeatures.cs" />
     <Compile Include="Builders\Insert\IInsertDataOrInSchemaSyntax.cs" />
     <Compile Include="Builders\Insert\IInsertDataSyntax.cs" />
     <Compile Include="Builders\Insert\IInsertExpressionRoot.cs" />
@@ -180,8 +219,11 @@
     <Compile Include="Expressions\AlterDefaultConstraintExpression.cs" />
     <Compile Include="Expressions\AlterTableExpression.cs" />
     <Compile Include="Expressions\AlterSchemaExpression.cs" />
+    <Compile Include="Expressions\CreateConstraintExpression.cs" />
     <Compile Include="Expressions\CreateSequenceExpression.cs" />
+    <Compile Include="Expressions\DeleteConstraintExpression.cs" />
     <Compile Include="Expressions\DeleteDataExpression.cs" />
+    <Compile Include="Expressions\DeleteDefaultConstraintExpression.cs" />
     <Compile Include="Expressions\DeleteSequenceExpression.cs" />
     <Compile Include="Expressions\ExecuteEmbeddedSqlScriptExpression.cs" />
     <Compile Include="Expressions\InsertDataExpression.cs" />
@@ -189,6 +231,9 @@
     <Compile Include="Builders\Insert\InsertExpressionRoot.cs" />
     <Compile Include="Expressions\UpdateDataExpression.cs" />
     <Compile Include="ForwardOnlyMigration.cs" />
+    <Compile Include="MigrationBase.cs" />
+    <Compile Include="Model\ConstraintDefinition.cs" />
+    <Compile Include="Model\IndexIncludeDefinition.cs" />
     <Compile Include="Model\DeletionDataDefinition.cs" />
     <Compile Include="Model\InsertionDataDefinition.cs" />
     <Compile Include="Builders\Rename\Column\IRenameColumnToSyntax.cs" />
@@ -216,6 +261,10 @@
     <Compile Include="Model\TableDefinition.cs" />
     <Compile Include="ProfileAttribute.cs" />
     <Compile Include="SystemMethods.cs" />
+    <Compile Include="TagsAttribute.cs" />
+    <Compile Include="AutoScriptMigration.cs" />
+    <Compile Include="TimestampedMigrationAttribute.cs" />
+    <Compile Include="TransactionBehavior.cs" />
     <Compile Include="VersionTableInfo\DefaultVersionTableMetaData.cs" />
     <Compile Include="VersionTableInfo\IVersionTableMetaData.cs" />
     <Compile Include="MigrationTraitAttribute.cs" />
@@ -264,7 +313,6 @@
     <Compile Include="Infrastructure\ICanBeValidated.cs" />
     <Compile Include="Infrastructure\Extensions\ExtensionsForICustomAttributeProvider.cs" />
     <Compile Include="Infrastructure\DefaultMigrationConventions.cs" />
-    <Compile Include="Infrastructure\MigrationMetadata.cs" />
     <Compile Include="MigrationAttribute.cs" />
     <Compile Include="Expressions\RenameTableExpression.cs" />
     <Compile Include="Expressions\DeleteForeignKeyExpression.cs" />

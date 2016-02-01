@@ -1,4 +1,4 @@
-﻿#region License
+#region License
 // 
 // Copyright (c) 2007-2009, Sean Chambers <schambers80@gmail.com>
 // Copyright (c) 2011, Grant Archibald
@@ -32,7 +32,7 @@ namespace FluentMigrator.Builders.IfDatabase
     /// <summary>
     /// Defines fluent expressions that can be conditionally executed
     /// </summary>
-    public interface IIfDatabaseExpressionRoot 
+    public interface IIfDatabaseExpressionRoot
     {
         IAlterExpressionRoot Alter { get; }
 

@@ -20,74 +20,118 @@ using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Text;
+using FluentMigrator.Runner.Generators.SqlServer;
 using FluentMigrator.Runner.Processors.SqlServer;
 
 namespace FluentMigrator.Tests.Helpers
 {
-	public class SqlServerTestTable : IDisposable
-	{
-	    private readonly string _schemaName;
-		private SqlConnection Connection { get; set; }
-		public string Name { get; set; }
-		private SqlTransaction Transaction { get; set; }
+    public class SqlServerTestTable : IDisposable
+    {
+        private readonly SqlServerQuoter quoter = new SqlServerQuoter();
+        private readonly string schemaName;
+        private SqlConnection Connection { get; set; }
+        private List<string> indexies = new List<string>();
+        public string Name { get; set; }
+        private SqlTransaction Transaction { get; set; }
 
-		public SqlServerTestTable(SqlServerProcessor processor, string schemaName, params string[] columnDefinitions)
-		{
-		    _schemaName = schemaName;
-		    Connection = (SqlConnection) processor.Connection;
-			Transaction = (SqlTransaction) processor.Transaction;
+        public SqlServerTestTable(SqlServerProcessor processor, string schemaName, params string[] columnDefinitions)
+        {
+            this.schemaName = schemaName;
+            Connection = (SqlConnection)processor.Connection;
+            Transaction = (SqlTransaction)processor.Transaction;
 
-			Name = "Table" + Guid.NewGuid().ToString("N");
-			Create(columnDefinitions);
-		}
+            Name = "TestTable";
 
-		public void Dispose()
-		{
-			Drop();
-		}
+            Create(columnDefinitions);
+        }
+        public SqlServerTestTable(string table, SqlServerProcessor processor, string schemaName, params string[] columnDefinitions)
+        {
+            this.schemaName = schemaName;
+            Connection = (SqlConnection)processor.Connection;
+            Transaction = (SqlTransaction)processor.Transaction;
 
-		public void Create(IEnumerable<string> columnDefinitions)
-		{
-			if (!string.IsNullOrEmpty(_schemaName))
-			{
-				using (var command = new SqlCommand(string.Format("CREATE SCHEMA [{0}]", _schemaName), Connection, Transaction))
-					command.ExecuteNonQuery();
-			}
+            Name = table;
 
-			var sb = new StringBuilder();
-			sb.Append("CREATE TABLE ");
-            if (!string.IsNullOrEmpty(_schemaName))
-                sb.AppendFormat("[{0}].", _schemaName);
-			sb.Append(Name);
+            Create(columnDefinitions);
+        }
 
-			foreach (string definition in columnDefinitions)
-			{
-				sb.Append("(");
-				sb.Append(definition);
-				sb.Append("), ");
-			}
+        public void Dispose()
+        {
+            Drop();
+        }
 
-			sb.Remove(sb.Length - 2, 2);
-
-			using (var command = new SqlCommand(sb.ToString(), Connection, Transaction))
-				command.ExecuteNonQuery();
-		}
-
-		public void Drop()
-		{
-            if (string.IsNullOrEmpty(_schemaName))
+        public void Create(IEnumerable<string> columnDefinitions)
+        {
+            if (!string.IsNullOrEmpty(schemaName))
             {
-                using (var command = new SqlCommand("DROP TABLE " + Name, Connection, Transaction))
+                using (var command = new SqlCommand(string.Format("CREATE SCHEMA {0}", quoter.QuoteSchemaName(schemaName)), Connection, Transaction))
                     command.ExecuteNonQuery();
             }
-            else
-            {
-				using (var command = new SqlCommand(string.Format("DROP TABLE [{0}].{1}",  _schemaName, Name), Connection, Transaction))
-                    command.ExecuteNonQuery();
 
-				using (var command = new SqlCommand(string.Format("DROP SCHEMA [{0}]", _schemaName), Connection, Transaction))
-					command.ExecuteNonQuery();
+            var quotedObjectName = string.Format(string.IsNullOrEmpty(schemaName) ? "{1}" : "{0}.{1}", quoter.QuoteSchemaName(schemaName), quoter.QuoteTableName(Name));
+
+            var sb = new StringBuilder();
+            sb.AppendFormat("CREATE TABLE ");
+            sb.Append(quotedObjectName);
+
+            sb.Append("(");
+            foreach (string definition in columnDefinitions)
+            {
+                sb.Append(definition);
+                sb.Append(", ");
             }
-		}
-	}
+
+            sb.Remove(sb.Length - 2, 2);
+            sb.Append(")");
+
+            using (var command = new SqlCommand(sb.ToString(), Connection, Transaction))
+                command.ExecuteNonQuery();
+        }
+
+        public void Drop()
+        {
+            var quotedSchema = quoter.QuoteSchemaName(schemaName);
+
+            var quotedObjectName = string.Format(string.IsNullOrEmpty(schemaName) ? "{1}" : "{0}.{1}", quoter.QuoteSchemaName(schemaName), quoter.QuoteTableName(Name));
+
+            foreach (var quoteIndexName in indexies)
+            {
+                using (var command = new SqlCommand(string.Format("DROP INDEX {0} ON {1}", quoteIndexName, quotedObjectName), Connection, Transaction))
+                    command.ExecuteNonQuery();
+            }
+
+            using (var command = new SqlCommand("DROP TABLE " + quotedObjectName, Connection, Transaction))
+                command.ExecuteNonQuery();
+
+            if (!string.IsNullOrEmpty(schemaName))
+            {
+                using (var command = new SqlCommand(string.Format("DROP SCHEMA {0}", quotedSchema), Connection, Transaction))
+                    command.ExecuteNonQuery();
+            }
+        }
+
+        public string WithIndexOn(string column)
+        {
+            var indexName = string.Format("idx_{0}", column);
+
+            var quotedObjectName = string.Format(string.IsNullOrEmpty(schemaName) ? "{1}" : "{0}.{1}", quoter.QuoteSchemaName(schemaName), quoter.QuoteTableName(Name));
+
+            var quotedIndexName = quoter.QuoteIndexName(indexName);
+
+            indexies.Add(quotedIndexName);
+
+            using (var command = new SqlCommand(string.Format("CREATE INDEX {0} ON {1} ({2})", quotedIndexName, quotedObjectName, quoter.QuoteColumnName(column)), Connection, Transaction))
+                command.ExecuteNonQuery();
+
+            return indexName;
+        }
+
+        public void WithDefaultValueOn(string column)
+        {
+            var defaultConstraintName = string.Format("[DF_{0}_{1}]", Name, column);
+            const int defaultValue = 1;
+            using (var command = new SqlCommand(string.Format(" ALTER TABLE {0}.{1} ADD CONSTRAINT {2} DEFAULT ({3}) FOR {4}", quoter.QuoteSchemaName(schemaName), quoter.QuoteTableName(Name), defaultConstraintName, defaultValue, quoter.QuoteColumnName(column)), Connection, Transaction))
+                command.ExecuteNonQuery();
+        }
+    }
 }

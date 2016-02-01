@@ -1,572 +1,203 @@
-using System;
 using System.Collections.Generic;
 using System.Data;
 using FluentMigrator.Expressions;
 using FluentMigrator.Model;
-using FluentMigrator.Runner.Generators;
 using FluentMigrator.Runner.Generators.Postgres;
 using NUnit.Framework;
 using NUnit.Should;
 
 namespace FluentMigrator.Tests.Unit.Generators.Postgres
 {
-	[TestFixture]
-	public class PostgresGeneratorTests
-	{
-        private PostgresGenerator generator;
+    [TestFixture]
+    public class PostgresGeneratorTests
+    {
+        protected PostgresGenerator Generator;
 
-        public PostgresGeneratorTests()
-		{
-			generator = new PostgresGenerator();
-		}
-
-        [Test]
-        public void CanCreateSchema()
+        [SetUp]
+        public void Setup()
         {
-            var expression = new CreateSchemaExpression {SchemaName = "Schema1"};
-            var sql = generator.Generate(expression);
-            sql.ShouldBe("CREATE SCHEMA \"Schema1\"");
+            Generator = new PostgresGenerator();
         }
 
         [Test]
-        public void CanDropSchema()
+        public void CanCreateTableWithDateTimeOffsetColumn() 
         {
-            var expression = new DeleteSchemaExpression() { SchemaName = "Schema1" };
-            var sql = generator.Generate(expression);
-            sql.ShouldBe("DROP SCHEMA \"Schema1\"");
-        }
+            var tableName = "TestTable1";
+            var expression = new CreateTableExpression { TableName = tableName };
+            expression.Columns.Add(new ColumnDefinition { TableName = tableName, Name = "TestColumn1", Type = DbType.DateTimeOffset });
+            expression.Columns.Add(new ColumnDefinition { TableName = tableName, Name = "TestColumn2", Type = DbType.DateTime2 });
+            expression.Columns.Add(new ColumnDefinition { TableName = tableName, Name = "TestColumn3", Type = DbType.Date });
+            expression.Columns.Add(new ColumnDefinition { TableName = tableName, Name = "TestColumn4", Type = DbType.Time });
 
-		[Test]
-		public void CanCreateTable()
-		{
-			string tableName = "NewTable";
-			CreateTableExpression expression = GetCreateTableExpression(tableName);
-			string sql = generator.Generate(expression);
-			sql.ShouldBe("CREATE TABLE \"public\".\"NewTable\" (\"ColumnName1\" text NOT NULL, \"ColumnName2\" integer NOT NULL)");
-		}
+            var result = Generator.Generate(expression);
+            result.ShouldBe(string.Format("CREATE TABLE \"public\".\"{0}\" (\"TestColumn1\" timestamptz NOT NULL, \"TestColumn2\" timestamp NOT NULL, \"TestColumn3\" date NOT NULL, \"TestColumn4\" time NOT NULL);", tableName));
+        }
 
         [Test]
-        public void CanCreateTableInSchema()
+        public void CanCreateAutoIncrementColumnForInt64()
         {
-            string tableName = "NewTable";
-            CreateTableExpression expression = GetCreateTableExpression(tableName);
-            expression.SchemaName = "wibble";
-            string sql = generator.Generate(expression);
-            sql.ShouldBe("CREATE TABLE \"wibble\".\"NewTable\" (\"ColumnName1\" text NOT NULL, \"ColumnName2\" integer NOT NULL)");
+            var expression = GeneratorTestHelper.GetCreateTableWithAutoIncrementExpression();
+            expression.Columns[0].Type = DbType.Int64;
+
+            var result = Generator.Generate(expression);
+            result.ShouldBe("CREATE TABLE \"public\".\"TestTable1\" (\"TestColumn1\" bigserial NOT NULL, \"TestColumn2\" integer NOT NULL);");
         }
-        
-		[Test]
-		public void CanCreateTableWithPrimaryKey()
-		{
-			string tableName = "NewTable";
-			CreateTableExpression expression = GetCreateTableExpression(tableName);
-			expression.Columns[0].IsPrimaryKey = true;
-			string sql = generator.Generate(expression);
-            sql.ShouldBe("CREATE TABLE \"public\".\"NewTable\" (\"ColumnName1\" text NOT NULL, \"ColumnName2\" integer NOT NULL, PRIMARY KEY (\"ColumnName1\"))");
-		}
 
         [Test]
-        public void CanCreateTableWithPrimaryKeyNamed()
+        public void CanCreateTableWithBinaryColumnWithSize()
         {
-            string tableName = "NewTable";
-            CreateTableExpression expression = GetCreateTableExpression(tableName);
-            expression.Columns[0].IsPrimaryKey = true;
-            expression.Columns[0].PrimaryKeyName = "PK_NewTable";
-            string sql = generator.Generate(expression);
-            sql.ShouldBe("CREATE TABLE \"public\".\"NewTable\" (\"ColumnName1\" text NOT NULL, \"ColumnName2\" integer NOT NULL, CONSTRAINT \"PK_NewTable\" PRIMARY KEY (\"ColumnName1\"))");
-        }
+            var expression = GeneratorTestHelper.GetCreateTableExpression();
+            expression.Columns[0].Type = DbType.Binary;
+            expression.Columns[0].Size = 10000;
 
-		[Test]
-		public void CanCreateTableWithDefaultValue()
-		{
-			string tableName = "NewTable";
-			CreateTableExpression expression = GetCreateTableExpression(tableName);
-			expression.Columns[0].DefaultValue = "abc";
-			string sql = generator.Generate(expression);
-            sql.ShouldBe("CREATE TABLE \"public\".\"NewTable\" (\"ColumnName1\" text NOT NULL DEFAULT 'abc', \"ColumnName2\" integer NOT NULL)");
-		}
+            var result = Generator.Generate(expression);
+            result.ShouldBe("CREATE TABLE \"public\".\"TestTable1\" (\"TestColumn1\" bytea NOT NULL, \"TestColumn2\" integer NOT NULL);"); // PostgreSQL does not actually use the configured size
+        }
 
         [Test]
         public void CanCreateTableWithBoolDefaultValue()
         {
-            string tableName = "NewTable";
-            CreateTableExpression expression = GetCreateTableExpression(tableName);
+            var expression = GeneratorTestHelper.GetCreateTableExpression();
             expression.Columns[0].DefaultValue = true;
-            string sql = generator.Generate(expression);
-            sql.ShouldBe("CREATE TABLE \"public\".\"NewTable\" (\"ColumnName1\" text NOT NULL DEFAULT true, \"ColumnName2\" integer NOT NULL)");
+
+            var result = Generator.Generate(expression);
+            result.ShouldBe("CREATE TABLE \"public\".\"TestTable1\" (\"TestColumn1\" text NOT NULL DEFAULT true, \"TestColumn2\" integer NOT NULL);");
         }
 
         [Test]
-        public void CanCreateTableWithDefaultValueExplicitlySetToNull()
+        public void CanUseSystemMethodCurrentUserAsADefaultValueForAColumn()
         {
-            string tableName = "NewTable";
-            var expression = GetCreateTableExpression(tableName);
-            expression.Columns[0].DefaultValue = null;
-            var sql = generator.Generate(expression);
-            sql.ShouldBe(
-                "CREATE TABLE \"public\".\"NewTable\" (\"ColumnName1\" text NOT NULL DEFAULT NULL, \"ColumnName2\" integer NOT NULL)");
+            const string tableName = "NewTable";
+            var columnDefinition = new ColumnDefinition { Name = "NewColumn", Size = 15, Type = DbType.String, DefaultValue = SystemMethods.CurrentUser };
+            var expression = new CreateColumnExpression { Column = columnDefinition, TableName = tableName };
 
-        }
-
-		[Test]
-		public void CanCreateTableWithMultiColumnPrimaryKey()
-		{
-			string tableName = "NewTable";
-			CreateTableExpression expression = GetCreateTableExpression(tableName);
-			expression.Columns[0].IsPrimaryKey = true;
-			expression.Columns[1].IsPrimaryKey = true;
-			string sql = generator.Generate(expression);
-            sql.ShouldBe("CREATE TABLE \"public\".\"NewTable\" (\"ColumnName1\" text NOT NULL, \"ColumnName2\" integer NOT NULL, PRIMARY KEY (\"ColumnName1\",\"ColumnName2\"))");
-		}
-
-        [Test]
-        public void CanCreateTableWithMultiColumnPrimaryKeyNamed()
-        {
-            string tableName = "NewTable";
-            CreateTableExpression expression = GetCreateTableExpression(tableName);
-            expression.Columns[0].IsPrimaryKey = true;
-            expression.Columns[0].PrimaryKeyName = "wibble";
-            expression.Columns[1].IsPrimaryKey = true;
-            string sql = generator.Generate(expression);
-            sql.ShouldBe("CREATE TABLE \"public\".\"NewTable\" (\"ColumnName1\" text NOT NULL, \"ColumnName2\" integer NOT NULL, CONSTRAINT \"wibble\" PRIMARY KEY (\"ColumnName1\",\"ColumnName2\"))");
-        }
-
-		[Test]
-		public void CanDropTable()
-		{
-			string tableName = "NewTable";
-			DeleteTableExpression expression = GetDeleteTableExpression(tableName);
-			string sql = generator.Generate(expression);
-			sql.ShouldBe("DROP TABLE \"public\".\"NewTable\"");
-		}
-
-        [Test]
-        public void CanDropTableInSchema()
-        {
-            string tableName = "NewTable";
-            DeleteTableExpression expression = GetDeleteTableExpression(tableName);
-            expression.SchemaName = "wibble";
-            string sql = generator.Generate(expression);
-            sql.ShouldBe("DROP TABLE \"wibble\".\"NewTable\"");
-        }
-
-		[Test]
-		public void CanDropColumn()
-		{
-			string tableName = "NewTable";
-			string columnName = "NewColumn";
-
-			var expression = new DeleteColumnExpression();
-			expression.TableName = tableName;
-			expression.ColumnName = columnName;
-
-			string sql = generator.Generate(expression);
-			sql.ShouldBe("ALTER TABLE \"public\".\"NewTable\" DROP COLUMN \"NewColumn\"");
-		}
-
-		[Test]
-		public void CanAddColumn()
-		{
-			string tableName = "NewTable";
-
-			var columnDefinition = new ColumnDefinition();
-			columnDefinition.Name = "NewColumn";
-			columnDefinition.Size = 5;
-            columnDefinition.Type = DbType.String;
-
-			var expression = new CreateColumnExpression();
-			expression.Column = columnDefinition;
-			expression.TableName = tableName;
-
-			string sql = generator.Generate(expression);
-			sql.ShouldBe("ALTER TABLE \"public\".\"NewTable\" ADD \"NewColumn\" varchar(5) NOT NULL");
-		}
-
-        [Test]
-        public void CanAddIdentityColumn()
-        {
-            string tableName = "NewTable";
-
-            var columnDefinition = new ColumnDefinition();
-            columnDefinition.Name = "id";
-            columnDefinition.IsIdentity=true;
-            columnDefinition.Type = DbType.Int32;
-
-            var expression = new CreateColumnExpression();
-            expression.Column = columnDefinition;
-            expression.TableName = tableName;
-
-            string sql = generator.Generate(expression);
-            sql.ShouldBe("ALTER TABLE \"public\".\"NewTable\" ADD \"id\" serial NOT NULL");
+            var result = Generator.Generate(expression);
+            result.ShouldBe("ALTER TABLE \"public\".\"NewTable\" ADD \"NewColumn\" varchar(15) NOT NULL DEFAULT current_user;");
         }
 
         [Test]
-        public void CanAddIdentityColumnForInt64()
+        public void CanUseSystemMethodCurrentUTCDateTimeAsADefaultValueForAColumn()
         {
-            string tableName = "NewTable";
+            const string tableName = "NewTable";
+            var columnDefinition = new ColumnDefinition { Name = "NewColumn", Size = 5, Type = DbType.String, DefaultValue = SystemMethods.CurrentUTCDateTime };
+            var expression = new CreateColumnExpression { Column = columnDefinition, TableName = tableName };
 
-            var columnDefinition = new ColumnDefinition();
-            columnDefinition.Name = "id";
-            columnDefinition.IsIdentity = true;
-            columnDefinition.Type = DbType.Int64;
-
-            var expression = new CreateColumnExpression();
-            expression.Column = columnDefinition;
-            expression.TableName = tableName;
-
-            string sql = generator.Generate(expression);
-            sql.ShouldBe("ALTER TABLE \"public\".\"NewTable\" ADD \"id\" bigserial NOT NULL");
-        }
-
-		[Test]
-		public void CanAddDecimalColumn()
-		{
-			string tableName = "NewTable";
-
-			var columnDefinition = new ColumnDefinition();
-			columnDefinition.Name = "NewColumn";
-			columnDefinition.Size = 19;
-			columnDefinition.Precision = 2;
-			columnDefinition.Type = DbType.Decimal;
-
-			var expression = new CreateColumnExpression();
-			expression.Column = columnDefinition;
-			expression.TableName = tableName;
-
-			string sql = generator.Generate(expression);
-			sql.ShouldBe("ALTER TABLE \"public\".\"NewTable\" ADD \"NewColumn\" decimal(2,19) NOT NULL");
-		}
-
-		[Test]
-		public void CanRenameTable()
-		{
-			var expression = new RenameTableExpression();
-			expression.OldName = "Table1";
-			expression.NewName = "Table2";
-
-			string sql = generator.Generate(expression);
-			sql.ShouldBe("ALTER TABLE \"public\".\"Table1\" RENAME TO \"Table2\"");
-		}
-
-		[Test]
-		public void CanRenameColumn()
-		{
-			var expression = new RenameColumnExpression();
-			expression.TableName = "Table1";
-			expression.OldName = "Column1";
-			expression.NewName = "Column2";
-
-			string sql = generator.Generate(expression);
-			sql.ShouldBe("ALTER TABLE \"public\".\"Table1\" RENAME COLUMN \"Column1\" TO \"Column2\"");
-		}
-
-		[Test]
-		public void CanCreateIndex()
-		{
-			var expression = new CreateIndexExpression();
-			expression.Index.Name = "IX_TEST";
-			expression.Index.TableName = "TEST_TABLE";
-			expression.Index.Columns.Add(new IndexColumnDefinition { Direction = Direction.Ascending, Name = "Column1" });
-			expression.Index.Columns.Add(new IndexColumnDefinition { Direction = Direction.Descending, Name = "Column2" });
-
-			string sql = generator.Generate(expression);
-			sql.ShouldBe("CREATE INDEX \"IX_TEST\" ON \"public\".\"TEST_TABLE\" (\"Column1\" ASC,\"Column2\" DESC)");
-		}
-
-        [Test]
-        public void CanCreateUniqueIndex()
-        {
-            var expression = new CreateIndexExpression();
-            expression.Index.Name = "IX_TEST";
-            expression.Index.TableName = "TEST_TABLE";
-            expression.Index.IsUnique = true;
-            expression.Index.Columns.Add(new IndexColumnDefinition { Direction = Direction.Ascending, Name = "Column1" });
-            expression.Index.Columns.Add(new IndexColumnDefinition { Direction = Direction.Descending, Name = "Column2" });
-
-            string sql = generator.Generate(expression);
-            sql.ShouldBe("CREATE UNIQUE INDEX \"IX_TEST\" ON \"public\".\"TEST_TABLE\" (\"Column1\" ASC,\"Column2\" DESC)");
+            var result = Generator.Generate(expression);
+            result.ShouldBe("ALTER TABLE \"public\".\"NewTable\" ADD \"NewColumn\" varchar(5) NOT NULL DEFAULT (now() at time zone 'UTC');");
         }
 
         [Test]
-        public void CanDropIndex()
+        public void ExplicitUnicodeStringIgnoredForNonSqlServer()
         {
-            var expression = new DeleteIndexExpression();
-            expression.Index.Name = "IX_TEST";
-            expression.Index.TableName = "TEST_TABLE";
-         
-            string sql = generator.Generate(expression);
-            sql.ShouldBe("DROP INDEX \"public\".\"IX_TEST\"");
-        }
-
-		[Test]
-		public void CanCreateForeignKey()
-		{
-			var expression = new CreateForeignKeyExpression();
-			expression.ForeignKey.Name = "FK_Test";
-			expression.ForeignKey.PrimaryTable = "TestPrimaryTable";
-			expression.ForeignKey.ForeignTable = "TestForeignTable";
-			expression.ForeignKey.PrimaryColumns = new[] { "Column1", "Column2" };
-			expression.ForeignKey.ForeignColumns = new[] { "Column3", "Column4" };
-
-			string sql = generator.Generate(expression);
-			sql.ShouldBe("ALTER TABLE \"public\".\"TestForeignTable\" ADD CONSTRAINT \"FK_Test\" FOREIGN KEY (\"Column3\",\"Column4\") REFERENCES \"public\".\"TestPrimaryTable\" (\"Column1\",\"Column2\")");
-		}
-
-        [Test]
-        public void CanCreateForeignKeyToDifferentSchema()
-        {
-            var expression = new CreateForeignKeyExpression();
-            expression.ForeignKey.Name = "FK_Test";
-            expression.ForeignKey.PrimaryTable = "TestPrimaryTable";
-            expression.ForeignKey.ForeignTable = "TestForeignTable";
-            expression.ForeignKey.PrimaryColumns = new[] { "Column1", "Column2" };
-            expression.ForeignKey.ForeignColumns = new[] { "Column3", "Column4" };
-            expression.ForeignKey.PrimaryTableSchema = "wibble";
-
-            string sql = generator.Generate(expression);
-            sql.ShouldBe("ALTER TABLE \"public\".\"TestForeignTable\" ADD CONSTRAINT \"FK_Test\" FOREIGN KEY (\"Column3\",\"Column4\") REFERENCES \"wibble\".\"TestPrimaryTable\" (\"Column1\",\"Column2\")");
-        }
-
-        [Test]
-        public void CanCreateForeignKeyWithDeleteCascade()
-        {
-            var expression = new CreateForeignKeyExpression();
-            expression.ForeignKey.Name = "FK_Test";
-            expression.ForeignKey.PrimaryTable = "TestPrimaryTable";
-            expression.ForeignKey.ForeignTable = "TestForeignTable";
-            expression.ForeignKey.PrimaryColumns = new[] { "Column1", "Column2" };
-            expression.ForeignKey.ForeignColumns = new[] { "Column3", "Column4" };
-            expression.ForeignKey.OnDelete = Rule.Cascade;
-
-            string sql = generator.Generate(expression);
-            sql.ShouldBe("ALTER TABLE \"public\".\"TestForeignTable\" ADD CONSTRAINT \"FK_Test\" FOREIGN KEY (\"Column3\",\"Column4\") REFERENCES \"public\".\"TestPrimaryTable\" (\"Column1\",\"Column2\") ON DELETE CASCADE");
-        }
-
-        [Test]
-        public void CanCreateForeignKeyWithUpdateSetNull()
-        {
-            var expression = new CreateForeignKeyExpression();
-            expression.ForeignKey.Name = "FK_Test";
-            expression.ForeignKey.PrimaryTable = "TestPrimaryTable";
-            expression.ForeignKey.ForeignTable = "TestForeignTable";
-            expression.ForeignKey.PrimaryColumns = new[] { "Column1", "Column2" };
-            expression.ForeignKey.ForeignColumns = new[] { "Column3", "Column4" };
-            expression.ForeignKey.OnUpdate = Rule.SetNull;
-
-            string sql = generator.Generate(expression);
-            sql.ShouldBe("ALTER TABLE \"public\".\"TestForeignTable\" ADD CONSTRAINT \"FK_Test\" FOREIGN KEY (\"Column3\",\"Column4\") REFERENCES \"public\".\"TestPrimaryTable\" (\"Column1\",\"Column2\") ON UPDATE SET NULL");
-        }
-
-        [Test]
-        public void CanCreateForeignKeyWithUpdateAndDelete()
-        {
-            var expression = new CreateForeignKeyExpression();
-            expression.ForeignKey.Name = "FK_Test";
-            expression.ForeignKey.PrimaryTable = "TestPrimaryTable";
-            expression.ForeignKey.ForeignTable = "TestForeignTable";
-            expression.ForeignKey.PrimaryColumns = new[] { "Column1", "Column2" };
-            expression.ForeignKey.ForeignColumns = new[] { "Column3", "Column4" };
-            expression.ForeignKey.OnUpdate = Rule.SetNull;
-            expression.ForeignKey.OnDelete = Rule.SetDefault;
-
-            string sql = generator.Generate(expression);
-            sql.ShouldBe("ALTER TABLE \"public\".\"TestForeignTable\" ADD CONSTRAINT \"FK_Test\" FOREIGN KEY (\"Column3\",\"Column4\") REFERENCES \"public\".\"TestPrimaryTable\" (\"Column1\",\"Column2\") ON DELETE SET DEFAULT ON UPDATE SET NULL");
-        }
-
-		[Test]
-		public void CanDropForeignKey()
-		{
-			var expression = new DeleteForeignKeyExpression();
-			expression.ForeignKey.Name = "FK_Test";
-			expression.ForeignKey.ForeignTable = "TestPrimaryTable";
-
-			string sql = generator.Generate(expression);
-			sql.ShouldBe("ALTER TABLE \"public\".\"TestPrimaryTable\" DROP CONSTRAINT \"FK_Test\"");
-		}
-
-        [Test]
-        public void CanInsertData()
-        {
-            var expression = new InsertDataExpression();
-            expression.TableName = "TestTable";
+            var expression = new InsertDataExpression {TableName = "TestTable"};
             expression.Rows.Add(new InsertionDataDefinition
-									{
-										new KeyValuePair<string, object>("Id", 1),
-										new KeyValuePair<string, object>("Name", "Just'in"),
-										new KeyValuePair<string, object>("Website", "codethinked.com")
-									});
-            expression.Rows.Add(new InsertionDataDefinition
-									{
-										new KeyValuePair<string, object>("Id", 2),
-										new KeyValuePair<string, object>("Name", "Na\\te"),
-										new KeyValuePair<string, object>("Website", "kohari.org")
-									});
-
-            var sql = generator.Generate(expression);
-
-            var expected = "INSERT INTO \"public\".\"TestTable\" (\"Id\",\"Name\",\"Website\") VALUES (1,'Just''in','codethinked.com');";
-            expected += "INSERT INTO \"public\".\"TestTable\" (\"Id\",\"Name\",\"Website\") VALUES (2,'Na\\te','kohari.org');";
-
-            sql.ShouldBe(expected);
-        }
-
-        [Test]
-        public void CanInsertGuidData()
-        {
-            var gid = Guid.NewGuid();
-            var expression = new InsertDataExpression { TableName = "TestTable" };
-            expression.Rows.Add(new InsertionDataDefinition { new KeyValuePair<string, object>("guid", gid) });
-
-            var sql = generator.Generate(expression);
-
-            var expected = String.Format("INSERT INTO \"public\".\"TestTable\" (\"guid\") VALUES ('{0}');", gid);
-
-            sql.ShouldBe(expected);
-        }
-
-        [Test]
-        public void CanAlterSchema()
-        {
-            var expression = new AlterSchemaExpression
-            {
-                DestinationSchemaName = "DEST",
-                SourceSchemaName = "SOURCE",
-                TableName = "TABLE"
-            };
-
-            var sql = generator.Generate(expression);
-            sql.ShouldBe("ALTER TABLE \"SOURCE\".\"TABLE\" SET SCHEMA \"DEST\"");
-        }
-
-        [Test]
-        public void CanAlterColumn()
-        {
-            var expression = new AlterColumnExpression
-                                 {
-                                     Column = new ColumnDefinition {Type = DbType.String, Name = "Col1"},
-                                     SchemaName = "Schema1",
-                                     TableName = "Table1"
-                                 };
-            var sql = generator.Generate(expression);
-            sql.ShouldBe("ALTER TABLE \"Schema1\".\"Table1\" ALTER \"Col1\" TYPE text");
-        }
-
-        [Test]
-        public void CanDeleteAllData()
-        {
-            var expression = new DeleteDataExpression
-                                 {
-                                     IsAllRows=true, TableName = "Table1"
-                                 };
-
-            var sql = generator.Generate(expression);
-            sql.ShouldBe("DELETE FROM \"public\".\"Table1\";");
-
-        }
-
-        [Test]
-        public void CanDeleteAllDataWithCondition()
-        {
-            var expression = new DeleteDataExpression
-            {
-                IsAllRows = false,
-                SchemaName = "public",
-                TableName = "Table1"
-            };
-            expression.Rows.Add(
-                new DeletionDataDefinition
-                    {
-                        new KeyValuePair<string, object>("description", "wibble")
-                    });
-
-            var sql = generator.Generate(expression);
-            sql.ShouldBe("DELETE FROM \"public\".\"Table1\" WHERE \"description\" = 'wibble';");
-        }
-
-        [Test]
-        public void CanDeleteAllDataWithNullCondition()
-        {
-            var expression = new DeleteDataExpression
-            {
-                IsAllRows = false,
-                SchemaName = "public",
-                TableName = "Table1"
-            };
-            expression.Rows.Add(
-                new DeletionDataDefinition
-                    {
-                        new KeyValuePair<string, object>("description", null)
-                    });
-
-            var sql = generator.Generate(expression);
-            sql.ShouldBe("DELETE FROM \"public\".\"Table1\" WHERE \"description\" IS NULL;");
-        }
-
-        [Test]
-        public void CanDeleteAllDataWithMultipleConditions()
-        {
-            var expression = new DeleteDataExpression
-            {
-                IsAllRows = false,
-                SchemaName = "public",
-                TableName = "Table1"
-            };
-            expression.Rows.Add(new DeletionDataDefinition
                                     {
-                                        new KeyValuePair<string, object>("description", null),
-                                        new KeyValuePair<string, object>("id", 10)
+                                        new KeyValuePair<string, object>("NormalString", "Just'in"),
+                                        new KeyValuePair<string, object>("UnicodeString", new ExplicitUnicodeString("codethinked'.com"))
                                     });
 
-            var sql = generator.Generate(expression);
-            sql.ShouldBe("DELETE FROM \"public\".\"Table1\" WHERE \"description\" IS NULL AND \"id\" = 10;");
+            var result = Generator.Generate(expression);
+            result.ShouldBe("INSERT INTO \"public\".\"TestTable\" (\"NormalString\",\"UnicodeString\") VALUES ('Just''in','codethinked''.com');");
         }
 
         [Test]
-        public void CanCreateSequence()
+        public void CanAlterColumnAndSetAsNullable()
         {
-            var expression = new CreateSequenceExpression
-                             {
-                                     Sequence =
-                                             {
-                                                     Cache = 10,
-                                                     Cycle = true,
-                                                     Increment = 2,
-                                                     MaxValue = 100,
-                                                     MinValue = 0,
-                                                     Name = "Sequence",
-                                                     SchemaName = "Schema",
-                                                     StartWith = 2
-                                             }
-                             };
-            var sql = generator.Generate(expression);
-            sql.ShouldBe("CREATE SEQUENCE \"Schema\".\"Sequence\" INCREMENT 2 MINVALUE 0 MAXVALUE 100 START WITH 2 CACHE 10 CYCLE");
+            var expression = new AlterColumnExpression
+            {
+                Column = new ColumnDefinition { Type = DbType.String, Name = "TestColumn1", IsNullable = true },
+                SchemaName = "TestSchema",
+                TableName = "TestTable1"
+            };
+
+            var result = Generator.Generate(expression);
+            result.ShouldBe("ALTER TABLE \"TestSchema\".\"TestTable1\" ALTER \"TestColumn1\" TYPE text, ALTER \"TestColumn1\" DROP NOT NULL;");
         }
 
         [Test]
-        public void CanDeleteSequence()
+        public void CanAlterColumnAndSetAsNotNullable()
         {
-            var expression = new DeleteSequenceExpression { SchemaName = "Schema", SequenceName = "Sequence" };
-            var sql = generator.Generate(expression);
-            sql.ShouldBe("DROP SEQUENCE \"Schema\".\"Sequence\"");
+            var expression = new AlterColumnExpression
+            {
+                Column = new ColumnDefinition { Type = DbType.String, Name = "TestColumn1", IsNullable = false },
+                SchemaName = "TestSchema",
+                TableName = "TestTable1"
+            };
+
+            var result = Generator.Generate(expression);
+            result.ShouldBe("ALTER TABLE \"TestSchema\".\"TestTable1\" ALTER \"TestColumn1\" TYPE text, ALTER \"TestColumn1\" SET NOT NULL;");
         }
 
-		private DeleteTableExpression GetDeleteTableExpression(string tableName)
-		{
-			return new DeleteTableExpression { TableName = tableName };
-		}
+        [Test]
+        public void CanAlterDefaultConstraintToNewGuid()
+        {
+            var expression = GeneratorTestHelper.GetAlterDefaultConstraintExpression();
+            expression.DefaultValue = SystemMethods.NewGuid;
+            expression.SchemaName = "TestSchema";
 
-		private CreateTableExpression GetCreateTableExpression(string tableName)
-		{
-			string columnName1 = "ColumnName1";
-			string columnName2 = "ColumnName2";
+            var result = Generator.Generate(expression);
+            result.ShouldBe("ALTER TABLE \"TestSchema\".\"TestTable1\" ALTER \"TestColumn1\" DROP DEFAULT, ALTER \"TestColumn1\" SET DEFAULT uuid_generate_v4();");
+        }
 
-			var column1 = new ColumnDefinition { Name = columnName1, Type = DbType.String, TableName = tableName};
-            var column2 = new ColumnDefinition { Name = columnName2, Type = DbType.Int32, TableName = tableName };
+        [Test]
+        public void CanDeleteDefaultConstraint()
+        {
+            var expression = new DeleteDefaultConstraintExpression
+            {
+                ColumnName = "TestColumn1",
+                SchemaName = "TestSchema",
+                TableName = "TestTable1"
+            };
 
-			var expression = new CreateTableExpression { TableName = tableName };
-			expression.Columns.Add(column1);
-			expression.Columns.Add(column2);
-			return expression;
-		}
-	}
+            var result = Generator.Generate(expression);
+            result.ShouldBe("ALTER TABLE \"TestSchema\".\"TestTable1\" ALTER \"TestColumn1\" DROP DEFAULT;");
+        }
+
+        [Test]
+        public void CanAlterDefaultConstraintToCurrentUser()
+        {
+            var expression = GeneratorTestHelper.GetAlterDefaultConstraintExpression();
+            expression.DefaultValue = SystemMethods.CurrentUser;
+            expression.SchemaName = "TestSchema";
+
+            var result = Generator.Generate(expression);
+            result.ShouldBe("ALTER TABLE \"TestSchema\".\"TestTable1\" ALTER \"TestColumn1\" DROP DEFAULT, ALTER \"TestColumn1\" SET DEFAULT current_user;");
+        }
+
+        [Test]
+        public void CanAlterDefaultConstraintToCurrentDate()
+        {
+            var expression = GeneratorTestHelper.GetAlterDefaultConstraintExpression();
+            expression.DefaultValue = SystemMethods.CurrentDateTime;
+            expression.SchemaName = "TestSchema";
+
+            var result = Generator.Generate(expression);
+            result.ShouldBe("ALTER TABLE \"TestSchema\".\"TestTable1\" ALTER \"TestColumn1\" DROP DEFAULT, ALTER \"TestColumn1\" SET DEFAULT now();");
+        }
+
+        [Test]
+        public void CanAlterDefaultConstraintToCurrentUtcDateTime()
+        {
+            var expression = GeneratorTestHelper.GetAlterDefaultConstraintExpression();
+            expression.DefaultValue = SystemMethods.CurrentUTCDateTime;
+            expression.SchemaName = "TestSchema";
+
+            var result = Generator.Generate(expression);
+            result.ShouldBe("ALTER TABLE \"TestSchema\".\"TestTable1\" ALTER \"TestColumn1\" DROP DEFAULT, ALTER \"TestColumn1\" SET DEFAULT (now() at time zone 'UTC');");
+        }
+
+        [Test]
+        public void CanAlterColumnAndOnlySetTypeIfIsNullableNotSet()
+        {
+            var expression = new AlterColumnExpression
+            {
+                Column = new ColumnDefinition { Type = DbType.String, Name = "TestColumn1", IsNullable = null },
+                SchemaName = "TestSchema",
+                TableName = "TestTable1"
+            };
+
+            var result = Generator.Generate(expression);
+            result.ShouldBe("ALTER TABLE \"TestSchema\".\"TestTable1\" ALTER \"TestColumn1\" TYPE text;");
+        }
+    }
 }

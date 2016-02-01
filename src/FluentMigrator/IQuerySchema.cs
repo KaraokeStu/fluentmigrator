@@ -25,6 +25,8 @@ namespace FluentMigrator
         bool ColumnExists(string schemaName, string tableName, string columnName);
         bool ConstraintExists(string schemaName, string tableName, string constraintName);
         bool IndexExists(string schemaName, string tableName, string indexName);
+        bool SequenceExists(string schemaName, string sequenceName);
+        bool DefaultValueExists(string schemaName, string tableName, string columnName, object defaultValue);
         string DatabaseType { get; }
     }
 }

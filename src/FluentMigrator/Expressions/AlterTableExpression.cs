@@ -1,4 +1,4 @@
-﻿#region License
+#region License
 // 
 // Copyright (c) 2007-2009, Sean Chambers <schambers80@gmail.com>
 // 
@@ -16,8 +16,8 @@
 //
 #endregion
 
-using System;
 using System.Collections.Generic;
+using FluentMigrator.Infrastructure;
 
 namespace FluentMigrator.Expressions
 {
@@ -25,6 +25,7 @@ namespace FluentMigrator.Expressions
     {
         public virtual string SchemaName { get; set; }
         public virtual string TableName { get; set; }
+        public virtual string TableDescription { get; set; }
 
         public AlterTableExpression()
         {
@@ -33,7 +34,7 @@ namespace FluentMigrator.Expressions
         public override void CollectValidationErrors(ICollection<string> errors)
         {
             if (string.IsNullOrEmpty(TableName))
-                errors.Add(String.Format("The {0} does not have a valid table name", GetType().Name));
+                errors.Add(ErrorMessages.TableNameCannotBeNullOrEmpty);
         }
 
         public override void ExecuteWith(IMigrationProcessor processor)

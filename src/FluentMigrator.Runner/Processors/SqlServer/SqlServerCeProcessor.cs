@@ -1,3 +1,5 @@
+using FluentMigrator.Runner.Helpers;
+
 #region License
 // 
 // Copyright (c) 2007-2009, Sean Chambers <schambers80@gmail.com>
@@ -21,54 +23,66 @@ using System;
 using System.Data;
 using System.IO;
 using FluentMigrator.Builders.Execute;
+using System.Text;
+using System.Collections.Generic;
 
 namespace FluentMigrator.Runner.Processors.SqlServer
 {
-	using System.Data.Common;
-
-	public sealed class SqlServerCeProcessor : ProcessorBase
+    public sealed class SqlServerCeProcessor : GenericProcessorBase
     {
-		private readonly IDbFactory factory;
-		private readonly IDbConnection connection;
-		private IDbTransaction transaction;
-
-		public override string DatabaseType
+        public override string DatabaseType
         {
             get { return "SqlServerCe"; }
         }
 
-        public SqlServerCeProcessor(IDbConnection connection, IMigrationGenerator generator, IAnnouncer announcer, IMigrationProcessorOptions options, IDbFactory factory)
-            : base(generator, announcer, options)
+        public override bool SupportsTransactions
         {
-        	this.factory = factory;
-        	this.connection = connection;
-            connection.Open();
-            BeginTransaction();
+            get
+            {
+                return true;
+            }
+        }
+
+        public SqlServerCeProcessor(IDbConnection connection, IMigrationGenerator generator, IAnnouncer announcer, IMigrationProcessorOptions options, IDbFactory factory)
+            : base(connection, factory, generator, announcer, options)
+        {
         }
 
         public override bool SchemaExists(string schemaName)
         {
-            return Exists("SELECT * FROM SYS.SCHEMAS WHERE NAME = '{0}'", FormatSqlEscape(schemaName));
+            return true; // SqlServerCe has no schemas
         }
 
         public override bool TableExists(string schemaName, string tableName)
         {
-            return Exists("SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = '{0}'", FormatSqlEscape(tableName));
+            return Exists("SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = '{0}'", FormatHelper.FormatSqlEscape(tableName));
         }
 
         public override bool ColumnExists(string schemaName, string tableName, string columnName)
         {
-            return Exists("SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{0}' AND COLUMN_NAME = '{1}'", FormatSqlEscape(tableName), FormatSqlEscape(columnName));
+            return Exists("SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = '{0}' AND COLUMN_NAME = '{1}'",
+                FormatHelper.FormatSqlEscape(tableName), FormatHelper.FormatSqlEscape(columnName));
         }
 
         public override bool ConstraintExists(string schemaName, string tableName, string constraintName)
         {
-            return Exists("SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_CATALOG = DB_NAME() AND TABLE_NAME = '{0}' AND CONSTRAINT_NAME = '{1}'", FormatSqlEscape(tableName), FormatSqlEscape(constraintName));
+            return Exists("SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE TABLE_NAME = '{0}' AND CONSTRAINT_NAME = '{1}'",
+                FormatHelper.FormatSqlEscape(tableName), FormatHelper.FormatSqlEscape(constraintName));
         }
 
         public override bool IndexExists(string schemaName, string tableName, string indexName)
         {
-            return Exists("SELECT NULL FROM sysindexes WHERE name = '{0}'", FormatSqlEscape(indexName));
+            return Exists("SELECT NULL FROM INFORMATION_SCHEMA.INDEXES WHERE INDEX_NAME = '{0}'", FormatHelper.FormatSqlEscape(indexName));
+        }
+
+        public override bool SequenceExists(string schemaName, string sequenceName)
+        {
+            return false;
+        }
+
+        public override bool DefaultValueExists(string schemaName, string tableName, string columnName, object defaultValue)
+        {
+            return false;
         }
 
         public override void Execute(string template, params object[] args)
@@ -78,10 +92,9 @@ namespace FluentMigrator.Runner.Processors.SqlServer
 
         public override bool Exists(string template, params object[] args)
         {
-            if (connection.State != ConnectionState.Open)
-                connection.Open();
+            EnsureConnectionIsOpen();
 
-			using (var command = factory.CreateCommand(String.Format(template, args), connection, transaction))
+            using (var command = Factory.CreateCommand(String.Format(template, args), Connection, Transaction))
             using (var reader = command.ExecuteReader())
             {
                 return reader.Read();
@@ -95,54 +108,14 @@ namespace FluentMigrator.Runner.Processors.SqlServer
 
         public override DataSet Read(string template, params object[] args)
         {
-            if (connection.State != ConnectionState.Open) connection.Open();
+            EnsureConnectionIsOpen();
 
             var ds = new DataSet();
-			using (var command = factory.CreateCommand(String.Format(template, args), connection, transaction))
-			{
-			    var adapter = factory.CreateDataAdapter(command);
+            using (var command = Factory.CreateCommand(String.Format(template, args), Connection, Transaction))
+            {
+                var adapter = Factory.CreateDataAdapter(command);
                 adapter.Fill(ds);
                 return ds;
-            }
-        }
-
-        public override void BeginTransaction()
-        {
-            Announcer.Say("Beginning Transaction");
-            transaction = connection.BeginTransaction();
-        }
-
-        public override void CommitTransaction()
-        {
-            Announcer.Say("Committing Transaction");
-
-            if (transaction != null)
-            {
-                transaction.Commit();
-                transaction = null;
-            }
-
-        	if (connection.State != ConnectionState.Closed)
-            {
-                connection.Close();
-            }
-        }
-
-        public override void RollbackTransaction()
-        {
-            if (transaction == null)
-            {
-                Announcer.Say("No transaction was available to rollback!");
-                return;
-            }
-
-            Announcer.Say("Rolling back transaction");
-
-            transaction.Rollback();
-
-        	if (connection.State != ConnectionState.Closed)
-            {
-                connection.Close();
             }
         }
 
@@ -153,44 +126,65 @@ namespace FluentMigrator.Runner.Processors.SqlServer
             if (Options.PreviewOnly || string.IsNullOrEmpty(sql))
                 return;
 
-            if (connection.State != ConnectionState.Open)
-                connection.Open();
+            EnsureConnectionIsOpen();
 
-            if (transaction == null)
-                BeginTransaction();
-
-			using (var command = factory.CreateCommand(sql, connection, transaction))
+            using (var command = Factory.CreateCommand("", Connection, Transaction))
             {
-                try
+                foreach (string statement in SplitIntoSingleStatements(sql))
                 {
-                    command.CommandTimeout = 0; // SQL Server CE does not support non-zero command timeout values!! :/
-                    command.ExecuteNonQuery();
-                }
-                catch (Exception ex)
-                {
-                    using (var message = new StringWriter())
+                    try
                     {
-                        message.WriteLine("An error occurred executing the following sql:");
-                        message.WriteLine(sql);
-                        message.WriteLine("The error was {0}", ex.Message);
+                        command.CommandText = statement;
+                        command.CommandTimeout = 0; // SQL Server CE does not support non-zero command timeout values!! :/
+                        command.ExecuteNonQuery();
+                    }
+                    catch (Exception ex)
+                    {
+                        using (var message = new StringWriter())
+                        {
+                            message.WriteLine("An error occurred executing the following sql:");
+                            message.WriteLine(statement);
+                            message.WriteLine("The error was {0}", ex.Message);
 
-                        throw new Exception(message.ToString(), ex);
+                            throw new Exception(message.ToString(), ex);
+                        }
                     }
                 }
             }
         }
 
-        public override void Process(PerformDBOperationExpression expression)
+        private IEnumerable<string> SplitIntoSingleStatements(string sql)
         {
-            if (connection.State != ConnectionState.Open) connection.Open();
+            StringBuilder builder = null;
+            foreach (string line in sql.Split(new string[] { Environment.NewLine }, StringSplitOptions.None))
+            {
+                if (!string.IsNullOrEmpty(line.Trim()) && !(line.TrimStart().StartsWith("--")) && (!line.ToUpper().Equals("GO")))
+                {
+                    if (builder == null)
+                    {
+                        builder = new StringBuilder();
+                    }
+                    builder.AppendLine(line);
 
-            if (expression.Operation != null)
-                expression.Operation(connection, transaction);
+                    if (line.TrimEnd().EndsWith(";"))
+                    {
+                        yield return builder.ToString();
+                        builder = null;
+                    }
+                }
+            }
+            if (builder != null)
+            {
+                yield return builder.ToString();
+            }
         }
 
-		private static string FormatSqlEscape(string sql)
+        public override void Process(PerformDBOperationExpression expression)
         {
-            return sql.Replace("'", "''");
+            EnsureConnectionIsOpen();
+
+            if (expression.Operation != null)
+                expression.Operation(Connection, Transaction);
         }
     }
 }

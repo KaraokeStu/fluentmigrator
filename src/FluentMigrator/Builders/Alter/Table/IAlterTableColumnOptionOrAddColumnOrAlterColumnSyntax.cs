@@ -1,4 +1,4 @@
-﻿#region License
+#region License
 // 
 // Copyright (c) 2007-2009, Sean Chambers <schambers80@gmail.com>
 // 
@@ -19,7 +19,13 @@
 
 namespace FluentMigrator.Builders.Alter.Table
 {
-    public interface IAlterTableColumnOptionOrAddColumnOrAlterColumnSyntax : IColumnOptionSyntax<IAlterTableColumnOptionOrAddColumnOrAlterColumnSyntax>, IAlterTableAddColumnOrAlterColumnSyntax
+    public interface IAlterTableColumnOptionOrAddColumnOrAlterColumnSyntax :
+        IColumnOptionSyntax<IAlterTableColumnOptionOrAddColumnOrAlterColumnSyntax, IAlterTableColumnOptionOrAddColumnOrAlterColumnOrForeignKeyCascadeSyntax>, 
+        IAlterTableAddColumnOrAlterColumnSyntax
     {
+        /// <summary>
+        /// The value to set against existing rows for the new column.  Only used for creating columns, not altering them.
+        /// </summary>
+        IAlterTableColumnOptionOrAddColumnOrAlterColumnSyntax SetExistingRowsTo(object value);
     }
 }

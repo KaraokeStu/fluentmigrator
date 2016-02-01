@@ -1,4 +1,4 @@
-﻿#region License
+#region License
 // 
 // Copyright (c) 2007-2009, Sean Chambers <schambers80@gmail.com>
 // 
@@ -20,8 +20,8 @@ using FluentMigrator.Infrastructure;
 
 namespace FluentMigrator.Builders.Alter.Column
 {
-	public interface IAlterColumnOnTableSyntax : IFluentSyntax
-	{
-		IAlterColumnAsTypeOrInSchemaSyntax OnTable(string name);
-	}
+    public interface IAlterColumnOnTableSyntax : IFluentSyntax
+    {
+        IAlterColumnAsTypeOrInSchemaSyntax OnTable(string name);
+    }
 }

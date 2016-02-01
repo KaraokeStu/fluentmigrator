@@ -26,7 +26,12 @@ namespace FluentMigrator.Runner.Processors
         protected readonly IMigrationGenerator Generator;
         protected readonly IAnnouncer Announcer;
         public IMigrationProcessorOptions Options { get; private set; }
+
+        public abstract string ConnectionString { get; }
+
         public abstract string DatabaseType { get; }
+
+        public bool WasCommitted { get; protected set; }
 
         protected ProcessorBase(IMigrationGenerator generator, IAnnouncer announcer, IMigrationProcessorOptions options)
         {
@@ -105,39 +110,54 @@ namespace FluentMigrator.Runner.Processors
             Process(Generator.Generate(expression));
         }
 
-        public void Process(InsertDataExpression expression)
+        public virtual void Process(InsertDataExpression expression)
         {
             Process(Generator.Generate(expression));
         }
 
-        public void Process(DeleteDataExpression expression)
+        public virtual void Process(DeleteDataExpression expression)
         {
             Process(Generator.Generate(expression));
         }
 
-        public void Process(AlterDefaultConstraintExpression expression)
+        public virtual void Process(AlterDefaultConstraintExpression expression)
         {
             Process(Generator.Generate(expression));
         }
 
-        public void Process(UpdateDataExpression expression)
+        public virtual void Process(UpdateDataExpression expression)
         {
             Process(Generator.Generate(expression));
         }
 
         public abstract void Process(PerformDBOperationExpression expression);
 
-        public void Process(AlterSchemaExpression expression)
+        public virtual void Process(AlterSchemaExpression expression)
         {
             Process(Generator.Generate(expression));
         }
 
-        public void Process(CreateSequenceExpression expression)
+        public virtual void Process(CreateSequenceExpression expression)
         {
             Process(Generator.Generate(expression));
         }
 
-        public void Process(DeleteSequenceExpression expression)
+        public virtual void Process(DeleteSequenceExpression expression)
+        {
+            Process(Generator.Generate(expression));
+        }
+
+        public virtual void Process(CreateConstraintExpression expression)
+        {
+            Process(Generator.Generate(expression));
+        }
+
+        public virtual void Process(DeleteConstraintExpression expression)
+        {
+            Process(Generator.Generate(expression));
+        }
+
+        public virtual void Process(DeleteDefaultConstraintExpression expression)
         {
             Process(Generator.Generate(expression));
         }
@@ -157,13 +177,32 @@ namespace FluentMigrator.Runner.Processors
         }
 
         public abstract System.Data.DataSet ReadTableData(string schemaName, string tableName);
+
         public abstract System.Data.DataSet Read(string template, params object[] args);
+
         public abstract bool Exists(string template, params object[] args);
+
         public abstract void Execute(string template, params object[] args);
+
         public abstract bool SchemaExists(string schemaName);
+
         public abstract bool TableExists(string schemaName, string tableName);
+
         public abstract bool ColumnExists(string schemaName, string tableName, string columnName);
+
         public abstract bool ConstraintExists(string schemaName, string tableName, string constraintName);
+
         public abstract bool IndexExists(string schemaName, string tableName, string indexName);
+
+        public abstract bool SequenceExists(string schemaName, string sequenceName);
+
+        public abstract bool DefaultValueExists(string schemaName, string tableName, string columnName, object defaultValue);
+
+        public void Dispose()
+        {
+            Dispose(true);
+        }
+
+        protected abstract void Dispose(bool isDisposing);
     }
 }

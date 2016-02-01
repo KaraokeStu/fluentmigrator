@@ -19,39 +19,68 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using FluentMigrator.Expressions;
+using FluentMigrator.Infrastructure;
 using FluentMigrator.Model;
 
 namespace FluentMigrator.Builders.Insert
 {
-	public class InsertDataExpressionBuilder : IInsertDataOrInSchemaSyntax
-	{
-		private readonly InsertDataExpression _expression;
+    public class InsertDataExpressionBuilder : IInsertDataOrInSchemaSyntax, ISupportAdditionalFeatures
+    {
+        private readonly InsertDataExpression _expression;
 
-		public InsertDataExpressionBuilder(InsertDataExpression expression)
-		{
-			_expression = expression;
-		}
+        public InsertDataExpressionBuilder(InsertDataExpression expression)
+        {
+            _expression = expression;
+        }
 
-		public IInsertDataSyntax Row(object dataAsAnonymousType)
-		{
-			_expression.Rows.Add(GetData(dataAsAnonymousType));
-			return this;
-		}
+        public IInsertDataSyntax Row(object dataAsAnonymousType)
+        {
+            IDictionary<string, object> data = ExtractData(dataAsAnonymousType);
 
-		public IInsertDataSyntax InSchema(string schemaName)
-		{
-			_expression.SchemaName = schemaName;
-			return this;
-		}
+            return Row(data);
+        }
 
-		private static InsertionDataDefinition GetData(object dataAsAnonymousType)
-		{
-			var data = new InsertionDataDefinition();
-			var properties = TypeDescriptor.GetProperties(dataAsAnonymousType);
+        public IInsertDataSyntax Row(IDictionary<string, object> data)
+        {
+            var dataDefinition = new InsertionDataDefinition();
 
-			foreach (PropertyDescriptor property in properties)
-				data.Add(new KeyValuePair<string, object>(property.Name, property.GetValue(dataAsAnonymousType)));
-			return data;
-		}
-	}
+            dataDefinition.AddRange(data);
+
+            _expression.Rows.Add(dataDefinition);
+
+            return this;
+        }
+
+        void ISupportAdditionalFeatures.AddAdditionalFeature(string feature, object value)
+        {
+            if (!_expression.AdditionalFeatures.ContainsKey(feature))
+            {
+                _expression.AdditionalFeatures.Add(feature, value);
+            }
+            else
+            {
+                _expression.AdditionalFeatures[feature] = value;
+            }
+        }
+
+        public IInsertDataSyntax InSchema(string schemaName)
+        {
+            _expression.SchemaName = schemaName;
+            return this;
+        }
+
+        private static IDictionary<string, object> ExtractData(object dataAsAnonymousType)
+        {
+            var data = new Dictionary<string, object>();
+
+            PropertyDescriptorCollection properties = TypeDescriptor.GetProperties(dataAsAnonymousType);
+
+            foreach (PropertyDescriptor property in properties)
+            {
+                data.Add(property.Name, property.GetValue(dataAsAnonymousType));
+            }
+
+            return data;
+        }
+    }
 }

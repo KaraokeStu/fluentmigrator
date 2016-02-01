@@ -1,3 +1,5 @@
+using FluentMigrator.Runner.Helpers;
+
 #region License
 // 
 // Copyright (c) 2007-2009, Sean Chambers <schambers80@gmail.com>
@@ -19,15 +21,13 @@
 using System;
 using System.Data;
 using FluentMigrator.Builders.Execute;
+using FluentMigrator.Runner.Generators.MySql;
 
 namespace FluentMigrator.Runner.Processors.MySql
 {
-	using System.Data.Common;
-
-	public class MySqlProcessor : ProcessorBase
+    public class MySqlProcessor : GenericProcessorBase
     {
-		private readonly IDbFactory factory;
-		private IDbConnection Connection { get; set; }
+        readonly MySqlQuoter quoter = new MySqlQuoter();
 
         public override string DatabaseType
         {
@@ -35,13 +35,11 @@ namespace FluentMigrator.Runner.Processors.MySql
         }
 
         public MySqlProcessor(IDbConnection connection, IMigrationGenerator generator, IAnnouncer announcer, IMigrationProcessorOptions options, IDbFactory factory)
-            : base(generator, announcer, options)
+            : base(connection, factory, generator, announcer, options)
         {
-        	this.factory = factory;
-        	Connection = connection;
         }
 
-		public override bool SchemaExists(string schemaName)
+        public override bool SchemaExists(string schemaName)
         {
             return true;
         }
@@ -49,38 +47,55 @@ namespace FluentMigrator.Runner.Processors.MySql
         public override bool TableExists(string schemaName, string tableName)
         {
             return Exists(@"select table_name from information_schema.tables 
-							where table_schema = SCHEMA() and table_name='{0}'", FormatSqlEscape(tableName));
+                            where table_schema = SCHEMA() and table_name='{0}'", FormatHelper.FormatSqlEscape(tableName));
         }
 
-	    public override bool ColumnExists(string schemaName, string tableName, string columnName)
+        public override bool ColumnExists(string schemaName, string tableName, string columnName)
         {
-        	const string sql = @"select column_name from information_schema.columns
-							where table_schema = SCHEMA() and table_name='{0}'
-							and column_name='{1}'";
-            return Exists(sql, FormatSqlEscape(tableName), FormatSqlEscape(columnName));
+            const string sql = @"select column_name from information_schema.columns
+                            where table_schema = SCHEMA() and table_name='{0}'
+                            and column_name='{1}'";
+            return Exists(sql, FormatHelper.FormatSqlEscape(tableName), FormatHelper.FormatSqlEscape(columnName));
         }
 
-    	public override bool ConstraintExists(string schemaName, string tableName, string constraintName)
+        public override bool ConstraintExists(string schemaName, string tableName, string constraintName)
         {
-        	const string sql = @"select constraint_name from information_schema.table_constraints
-							where table_schema = SCHEMA() and table_name='{0}'
-							and constraint_name='{1}'";
-            return Exists(sql, FormatSqlEscape(tableName), FormatSqlEscape(constraintName));
+            const string sql = @"select constraint_name from information_schema.table_constraints
+                            where table_schema = SCHEMA() and table_name='{0}'
+                            and constraint_name='{1}'";
+            return Exists(sql, FormatHelper.FormatSqlEscape(tableName), FormatHelper.FormatSqlEscape(constraintName));
         }
 
-    	public override bool IndexExists(string schemaName, string tableName, string indexName)
+        public override bool IndexExists(string schemaName, string tableName, string indexName)
         {
-        	const string sql = @"select index_name from information_schema.statistics
-							where table_schema = SCHEMA() and table_name='{0}'
-							and index_name='{1}'";
-            return Exists(sql, FormatSqlEscape(tableName), FormatSqlEscape(indexName));
+            const string sql = @"select index_name from information_schema.statistics
+                            where table_schema = SCHEMA() and table_name='{0}'
+                            and index_name='{1}'";
+            return Exists(sql, FormatHelper.FormatSqlEscape(tableName), FormatHelper.FormatSqlEscape(indexName));
         }
 
-    	public override void Execute(string template, params object[] args)
+        public override bool SequenceExists(string schemaName, string sequenceName)
         {
-            if (Connection.State != ConnectionState.Open) Connection.Open();
+            return false;
+        }
 
-            using (var command = factory.CreateCommand(String.Format(template, args), Connection))
+        public override bool DefaultValueExists(string schemaName, string tableName, string columnName, object defaultValue)
+        {
+            string defaultValueAsString = string.Format("%{0}%", FormatHelper.FormatSqlEscape(defaultValue.ToString()));
+            return Exists("SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = SCHEMA() AND TABLE_NAME = '{0}' AND COLUMN_NAME = '{1}' AND COLUMN_DEFAULT LIKE '{2}'",
+               FormatHelper.FormatSqlEscape(tableName), FormatHelper.FormatSqlEscape(columnName), defaultValueAsString);
+        }
+
+        public override void Execute(string template, params object[] args)
+        {
+            if (Options.PreviewOnly)
+            {
+                return;
+            }
+
+            EnsureConnectionIsOpen();
+
+            using (var command = Factory.CreateCommand(String.Format(template, args), Connection))
             {
                 command.CommandTimeout = Options.Timeout;
                 command.ExecuteNonQuery();
@@ -89,16 +104,16 @@ namespace FluentMigrator.Runner.Processors.MySql
 
         public override bool Exists(string template, params object[] args)
         {
-            if (Connection.State != ConnectionState.Open) Connection.Open();
+            EnsureConnectionIsOpen();
 
-			using (var command = factory.CreateCommand(String.Format(template, args), Connection))
+            using (var command = Factory.CreateCommand(String.Format(template, args), Connection))
             {
                 command.CommandTimeout = Options.Timeout;
                 using (var reader = command.ExecuteReader())
                 {
                     try
                     {
-                    	return reader.Read();
+                        return reader.Read();
                     }
                     catch
                     {
@@ -110,19 +125,19 @@ namespace FluentMigrator.Runner.Processors.MySql
 
         public override DataSet ReadTableData(string schemaName, string tableName)
         {
-            return Read("select * from {0}", tableName);
+            return Read("select * from {0}", quoter.QuoteTableName(tableName));
         }
 
         public override DataSet Read(string template, params object[] args)
         {
-            if (Connection.State != ConnectionState.Open) Connection.Open();
+            EnsureConnectionIsOpen();
 
             var ds = new DataSet();
-            using (var command =  factory.CreateCommand(String.Format(template, args), Connection))
+            using (var command = Factory.CreateCommand(String.Format(template, args), Connection))
             {
                 command.CommandTimeout = Options.Timeout;
 
-                var adapter = factory.CreateDataAdapter(command);
+                var adapter = Factory.CreateDataAdapter(command);
                 adapter.Fill(ds);
                 return ds;
             }
@@ -135,10 +150,9 @@ namespace FluentMigrator.Runner.Processors.MySql
             if (Options.PreviewOnly || string.IsNullOrEmpty(sql))
                 return;
 
-            if (Connection.State != ConnectionState.Open)
-                Connection.Open();
+            EnsureConnectionIsOpen();
 
-			using (var command = factory.CreateCommand(sql, Connection))
+            using (var command = Factory.CreateCommand(sql, Connection))
             {
                 command.CommandTimeout = Options.Timeout;
                 command.ExecuteNonQuery();
@@ -147,7 +161,12 @@ namespace FluentMigrator.Runner.Processors.MySql
 
         public override void Process(PerformDBOperationExpression expression)
         {
-            if (Connection.State != ConnectionState.Open) Connection.Open();
+            Announcer.Say("Performing DB Operation");
+
+            if (Options.PreviewOnly)
+                return;
+
+            EnsureConnectionIsOpen();
 
             if (expression.Operation != null)
                 expression.Operation(Connection, null);
@@ -171,16 +190,11 @@ SELECT CONCAT(
              CONCAT('DEFAULT ', QUOTE(COLUMN_DEFAULT), ' ')),
           UPPER(extra))
   FROM INFORMATION_SCHEMA.COLUMNS
- WHERE TABLE_NAME = '{0}' AND COLUMN_NAME = '{1}'", FormatSqlEscape(expression.TableName), FormatSqlEscape(expression.OldName));
+ WHERE TABLE_NAME = '{0}' AND COLUMN_NAME = '{1}'", FormatHelper.FormatSqlEscape(expression.TableName), FormatHelper.FormatSqlEscape(expression.OldName));
 
             var columnDefinition = Read(columnDefinitionSql).Tables[0].Rows[0].Field<string>(0);
 
             Process(Generator.Generate(expression) + columnDefinition);
-        }
-
-        private static string FormatSqlEscape(string value)
-        {
-            return value.Replace("'", "''");
         }
     }
 }

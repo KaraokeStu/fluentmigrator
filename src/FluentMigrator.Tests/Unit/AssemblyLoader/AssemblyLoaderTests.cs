@@ -16,34 +16,36 @@
 //
 #endregion
 
-using System;
-using System.Collections;
-using System.Reflection;
 using FluentMigrator.Runner.Initialization.AssemblyLoader;
 using NUnit.Framework;
 
 namespace FluentMigrator.Tests.Unit.AssemblyLoader
 {
-	[TestFixture]
-	public class AssemblyLoaderTests
-	{
+    [TestFixture]
+    public class AssemblyLoaderTests
+    {
+        private AssemblyLoaderFactory assemblyLoaderFactory;
 
-		[Test]
-		public void TestLoaders()
-		{
-			string filename = GetType().Assembly.Location;
-			string assemblyName = GetType().Assembly.GetName().Name;
-			IAssemblyLoader assemblyLoaderFromFile = AssemblyLoaderFactory.GetAssemblyLoader(filename);
-            Assert.IsInstanceOf(typeof(AssemblyLoaderFromFile), assemblyLoaderFromFile);
-			Assembly assemblyFromFile = assemblyLoaderFromFile.Load();
+        [SetUp]
+        public void Setup()
+        {
+            assemblyLoaderFactory = new AssemblyLoaderFactory();
+        }
 
-			IAssemblyLoader assemblyLoaderFromName = AssemblyLoaderFactory.GetAssemblyLoader(assemblyName);
-            Assert.IsInstanceOf(typeof(AssemblyLoaderFromName), assemblyLoaderFromName);
-			Assembly assemblyFromName = assemblyLoaderFromName.Load();
+        [Test]
+        public void ShouldBeAbleToLoadAssemblyByFileName()
+        {
+            var assemblyLoader = assemblyLoaderFactory.GetAssemblyLoader(GetType().Assembly.Location);
+            Assert.IsInstanceOf(typeof(AssemblyLoaderFromFile), assemblyLoader);
+            Assert.AreEqual(GetType().Assembly, assemblyLoader.Load());
+        }
 
-			Assert.AreEqual(assemblyFromFile.FullName,assemblyFromName.FullName );
-		}
-
-
-	}
+        [Test]
+        public void ShouldBeAbleToLoadAssemblyAssemblyName()
+        {
+            var assemblyLoader = assemblyLoaderFactory.GetAssemblyLoader(GetType().Assembly.GetName().Name);
+            Assert.IsInstanceOf(typeof(AssemblyLoaderFromName), assemblyLoader);
+            Assert.AreEqual(GetType().Assembly, assemblyLoader.Load());
+        }
+    }
 }

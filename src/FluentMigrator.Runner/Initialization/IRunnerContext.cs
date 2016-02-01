@@ -16,17 +16,22 @@
 //
 #endregion
 
+using System.Collections.Generic;
+
 namespace FluentMigrator.Runner.Initialization
 {
     public interface IRunnerContext
     {
         string Database { get; set; }
         string Connection { get; set; }
-        string Target { get; set; }
+        string[] Targets { get; set; }
         bool PreviewOnly { get; set; }
         string Namespace { get; set; }
+        bool NestedNamespaces { get; set; }
         string Task { get; set; }
         long Version { get; set; }
+        long StartVersion { get; set; }
+        bool NoConnection { get; set; }
         int Steps { get; set; }
         string WorkingDirectory { get; set; }
         string Profile { get; set; }
@@ -34,6 +39,12 @@ namespace FluentMigrator.Runner.Initialization
         IStopWatch StopWatch { get; }
         int Timeout { get; set; }
         string ConnectionStringConfigPath { get; set; }
-        //IMigrationProcessor Processor { get; }
+        IEnumerable<string> Tags { get; set; }
+        string ProviderSwitches { get; set; }
+
+        bool TransactionPerSession { get; set; }
+
+        /// <summary>The arbitrary application context passed to the task runner.</summary>
+        object ApplicationContext { get; set; }
     }
 }

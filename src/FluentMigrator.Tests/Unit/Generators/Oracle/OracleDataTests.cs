@@ -1,89 +1,163 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using NUnit.Framework;
 using FluentMigrator.Runner.Generators.Oracle;
+using NUnit.Framework;
 using NUnit.Should;
-using FluentMigrator.Expressions;
-using FluentMigrator.Model;
 
 namespace FluentMigrator.Tests.Unit.Generators.Oracle
 {
+    [TestFixture]
     public class OracleDataTests : BaseDataTests
     {
-        private OracleGenerator generator;
+        protected OracleGenerator Generator;
 
         [SetUp]
         public void Setup()
         {
-            generator = new OracleGenerator();
-
+            Generator = new OracleGenerator();
         }
+
         [Test]
-        public override void CanInsertData()
+        public override void CanDeleteDataForAllRowsWithCustomSchema()
         {
-            var expression = GeneratorTestHelper.GetInsertDataExpression();
-            string sql = generator.Generate(expression);
+            var expression = GeneratorTestHelper.GetDeleteDataAllRowsExpression();
+            expression.SchemaName = "TestSchema";
 
-            string expected = "INSERT ALL INTO TestTable1 (Id, Name, Website) VALUES (1, 'Just''in', 'codethinked.com')";
-            expected += @" INTO TestTable1 (Id, Name, Website) VALUES (2, 'Na\te', 'kohari.org')";
-            expected += " SELECT 1 FROM DUAL";
-
-            sql.ShouldBe(expected);
+            var result = Generator.Generate(expression);
+            result.ShouldBe("DELETE FROM TestTable1 WHERE 1 = 1");
         }
 
         [Test]
-        public override void CanDeleteData()
-        {
-            var expression = GeneratorTestHelper.GetDeleteDataExpression();
-
-            var sql = generator.Generate(expression);
-
-            sql.ShouldBe("DELETE FROM TestTable1 WHERE Name = 'Just''in' AND Website IS NULL");
-        }
-
-        [Test]
-        public override void CanDeleteDataAllRows()
+        public override void CanDeleteDataForAllRowsWithDefaultSchema()
         {
             var expression = GeneratorTestHelper.GetDeleteDataAllRowsExpression();
 
-            var sql = generator.Generate(expression);
-
-            sql.ShouldBe("DELETE FROM TestTable1 WHERE 1 = 1");
+            var result = Generator.Generate(expression);
+            result.ShouldBe("DELETE FROM TestTable1 WHERE 1 = 1");
         }
 
         [Test]
-        public override void CanDeleteDataMultipleRows()
+        public override void CanDeleteDataForMultipleRowsWithCustomSchema()
+        {
+            var expression = GeneratorTestHelper.GetDeleteDataMultipleRowsExpression();
+            expression.SchemaName = "TestSchema";
+
+            var result = Generator.Generate(expression);
+            result.ShouldBe("DELETE FROM TestTable1 WHERE Name = 'Just''in' AND Website IS NULL; DELETE FROM TestTable1 WHERE Website = 'github.com'");
+        }
+
+        [Test]
+        public override void CanDeleteDataForMultipleRowsWithDefaultSchema()
         {
             var expression = GeneratorTestHelper.GetDeleteDataMultipleRowsExpression();
 
-            var sql = generator.Generate(expression);
-
-            sql.ShouldBe("DELETE FROM TestTable1 WHERE Name = 'Just''in' AND Website IS NULL; DELETE FROM TestTable1 WHERE Website = 'github.com'");
+            var result = Generator.Generate(expression);
+            result.ShouldBe("DELETE FROM TestTable1 WHERE Name = 'Just''in' AND Website IS NULL; DELETE FROM TestTable1 WHERE Website = 'github.com'");
         }
 
         [Test]
-        public override void CanInsertGuidData()
+        public override void CanDeleteDataWithCustomSchema()
+        {
+            var expression = GeneratorTestHelper.GetDeleteDataExpression();
+            expression.SchemaName = "TestSchema";
+
+            var result = Generator.Generate(expression);
+            result.ShouldBe("DELETE FROM TestTable1 WHERE Name = 'Just''in' AND Website IS NULL");
+        }
+
+        [Test]
+        public override void CanDeleteDataWithDefaultSchema()
+        {
+            var expression = GeneratorTestHelper.GetDeleteDataExpression();
+
+            var result = Generator.Generate(expression);
+            result.ShouldBe("DELETE FROM TestTable1 WHERE Name = 'Just''in' AND Website IS NULL");
+        }
+
+        [Test]
+        public override void CanInsertDataWithCustomSchema()
+        {
+            var expression = GeneratorTestHelper.GetInsertDataExpression();
+            expression.SchemaName = "TestSchema";
+
+            var expected = "INSERT ALL INTO TestSchema.TestTable1 (Id, Name, Website) VALUES (1, 'Just''in', 'codethinked.com')";
+            expected += " INTO TestSchema.TestTable1 (Id, Name, Website) VALUES (2, 'Na\\te', 'kohari.org')";
+            expected += " SELECT 1 FROM DUAL";
+
+            var result = Generator.Generate(expression);
+            result.ShouldBe(expected);
+        }
+
+        [Test]
+        public override void CanInsertDataWithDefaultSchema()
+        {
+            var expression = GeneratorTestHelper.GetInsertDataExpression();
+
+            var expected = "INSERT ALL INTO TestTable1 (Id, Name, Website) VALUES (1, 'Just''in', 'codethinked.com')";
+            expected += " INTO TestTable1 (Id, Name, Website) VALUES (2, 'Na\\te', 'kohari.org')";
+            expected += " SELECT 1 FROM DUAL";
+
+            var result = Generator.Generate(expression);
+            result.ShouldBe(expected);
+        }
+
+        [Test]
+        public override void CanInsertGuidDataWithCustomSchema()
         {
             //Oracle can not insert GUID data using string representation
-            var expression = GeneratorTestHelper.GetInsertGUIDExpression();
+            var expression = GeneratorTestHelper.GetInsertGUIDExpression(new Guid("7E487B79-626C-4E7D-811C-BC30AB31C564"));
 
+            expression.SchemaName = "TestSchema";
 
-            string sql = generator.Generate(expression);
-
-            string expected = String.Format("INSERT ALL INTO TestTable1 (guid) VALUES ('{0}') SELECT 1 FROM DUAL", GeneratorTestHelper.TestGuid.ToString());
-
-            sql.ShouldBe(expected);
+            var result = Generator.Generate(expression);
+            result.ShouldBe("INSERT ALL INTO TestSchema.TestTable1 (guid) VALUES ('797B487E6C627D4E811CBC30AB31C564') SELECT 1 FROM DUAL");
         }
 
         [Test]
-        public override void CanUpdateData()
+        public override void CanInsertGuidDataWithDefaultSchema()
+        {
+            //Oracle can not insert GUID data using string representation
+            var expression = GeneratorTestHelper.GetInsertGUIDExpression(new Guid("7E487B79-626C-4E7D-811C-BC30AB31C564"));
+
+            var result = Generator.Generate(expression);
+            result.ShouldBe("INSERT ALL INTO TestTable1 (guid) VALUES ('797B487E6C627D4E811CBC30AB31C564') SELECT 1 FROM DUAL");
+        }
+
+        [Test]
+        public override void CanUpdateDataForAllDataWithCustomSchema()
+        {
+            var expression = GeneratorTestHelper.GetUpdateDataExpressionWithAllRows();
+            expression.SchemaName = "TestSchema";
+
+            var result = Generator.Generate(expression);
+            result.ShouldBe("UPDATE TestTable1 SET Name = 'Just''in', Age = 25 WHERE 1 = 1");
+        }
+
+        [Test]
+        public override void CanUpdateDataForAllDataWithDefaultSchema()
+        {
+            var expression = GeneratorTestHelper.GetUpdateDataExpressionWithAllRows();
+
+            var result = Generator.Generate(expression);
+            result.ShouldBe("UPDATE TestTable1 SET Name = 'Just''in', Age = 25 WHERE 1 = 1");
+        }
+
+        [Test]
+        public override void CanUpdateDataWithCustomSchema()
+        {
+            var expression = GeneratorTestHelper.GetUpdateDataExpression();
+            expression.SchemaName = "TestSchema";
+
+            var result = Generator.Generate(expression);
+            result.ShouldBe("UPDATE TestTable1 SET Name = 'Just''in', Age = 25 WHERE Id = 9 AND Homepage IS NULL");
+        }
+
+        [Test]
+        public override void CanUpdateDataWithDefaultSchema()
         {
             var expression = GeneratorTestHelper.GetUpdateDataExpression();
 
-            var sql = generator.Generate(expression);
-            sql.ShouldBe("UPDATE TestTable1 SET Name = 'Just''in', Age = 25 WHERE Id = 9 AND Homepage IS NULL");
+            var result = Generator.Generate(expression);
+            result.ShouldBe("UPDATE TestTable1 SET Name = 'Just''in', Age = 25 WHERE Id = 9 AND Homepage IS NULL");
         }
     }
 }

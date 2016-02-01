@@ -16,17 +16,20 @@
 //
 #endregion
 
+using System;
+using System.IO;
+using System.Reflection;
+using FluentMigrator.Exceptions;
+using FluentMigrator.Runner;
 using FluentMigrator.Runner.Announcers;
+using FluentMigrator.Runner.Extensions;
 using FluentMigrator.Runner.Initialization;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
-using System;
-using System.Reflection;
-using System.IO;
 
 namespace FluentMigrator.MSBuild
 {
-    public class Migrate : Task
+    public class Migrate : AppDomainIsolatedTask
     {
 
 
@@ -45,14 +48,18 @@ namespace FluentMigrator.MSBuild
         }
 
         private string databaseType;
-        private string migrationAssembly;
 
+        public string ApplicationContext { get; set; }
+        
         [Required]
         public string Connection { get; set; }
 
-        public string Target { get { return migrationAssembly; } set { migrationAssembly = value; } }
+        public string ConnectionStringConfigPath { get; set; }
 
-        public string MigrationAssembly { get { return migrationAssembly; } set { migrationAssembly = value; } }
+        public string Target { get { return (Targets != null && Targets.Length == 1) ? Targets[0] : string.Empty; } set { Targets = new string[] { value }; } }
+
+        public string[] Targets { get; set; }
+        public string MigrationAssembly { get { return (Targets != null && Targets.Length == 1) ? Targets[0] : string.Empty; } set { Targets = new string[] {value}; } }
 
         public string Database { get { return databaseType; } set { databaseType = value; } }
 
@@ -62,6 +69,8 @@ namespace FluentMigrator.MSBuild
 
         public string Namespace { get; set; }
 
+        public bool Nested { get; set; }
+
         public string Task { get; set; }
 
         public long Version { get; set; }
@@ -70,53 +79,100 @@ namespace FluentMigrator.MSBuild
 
         public string WorkingDirectory { get; set; }
 
+        public int Timeout { get; set; }
+
         public string Profile { get; set; }
+
+        public bool PreviewOnly { get; set; }
+
+        public string Tags { get; set; }
+
+        public bool Output { get; set; }
+
+        public string OutputFilename { get; set; }
+
+        public bool TransactionPerSession { get; set; }
 
         public override bool Execute()
         {
-            
+
             if (string.IsNullOrEmpty(databaseType))
             {
-                Log.LogError("You must specific a database type. i.e. mysql or sqlserver");
+                Log.LogError("You must specify a database type. i.e. mysql or sqlserver");
                 return false;
             }
 
-            if (string.IsNullOrEmpty(migrationAssembly))
+            if (Targets == null || Targets.Length == 0)
             {
-                Log.LogError("You must specific a migration assembly");
+                Log.LogError("You must specify a migration assemblies ");
                 return false;
             }
 
-
-            Log.LogCommandLine(MessageImportance.Low, "Creating Context");
-            var announcer = new BaseAnnouncer(msg => Log.LogCommandLine(MessageImportance.Normal, msg))
+            IAnnouncer announcer = new ConsoleAnnouncer
             {
                 ShowElapsedTime = Verbose,
                 ShowSql = Verbose
             };
+
+            StreamWriter outputWriter = null;
+            if (Output)
+            {
+                if (string.IsNullOrEmpty(OutputFilename))
+                    OutputFilename = Path.GetFileName(Target) + ".sql";
+
+                outputWriter = new StreamWriter(OutputFilename);
+                var fileAnnouncer = new TextWriterAnnouncer(outputWriter)
+                {
+                    ShowElapsedTime = false,
+                    ShowSql = true
+                };
+
+                announcer = new CompositeAnnouncer(announcer, fileAnnouncer);
+            }
+
+            Log.LogMessage(MessageImportance.Low, "Creating Context");
+                   
             var runnerContext = new RunnerContext(announcer)
             {
+                ApplicationContext = ApplicationContext,
                 Database = databaseType,
                 Connection = Connection,
-                Target = Target,
-                PreviewOnly = false,
+                ConnectionStringConfigPath = ConnectionStringConfigPath,
+                Targets = Targets,
+                PreviewOnly = PreviewOnly,
                 Namespace = Namespace,
+                NestedNamespaces = Nested,
                 Task = Task,
                 Version = Version,
                 Steps = Steps,
                 WorkingDirectory = WorkingDirectory,
-                Profile = Profile 
+                Profile = Profile,
+                Tags = Tags.ToTags(),
+                Timeout = Timeout,
+                TransactionPerSession = TransactionPerSession
             };
 
-            Log.LogCommandLine(MessageImportance.Low, "Executing Migration Runner");
+            Log.LogMessage(MessageImportance.Low, "Executing Migration Runner");
             try
             {
                 new TaskExecutor(runnerContext).Execute();
             }
+            catch (ProcessorFactoryNotFoundException ex)
+            {
+                Log.LogError("While executing migrations the following error was encountered: {0}", ex.Message);
+                return false;
+            }
             catch (Exception ex)
             {
-                announcer.Error("While executing migrations the following error was encountered: {0}", ex.Message);
+                Log.LogError("While executing migrations the following error was encountered: {0}, {1}", ex.Message, ex.StackTrace);
                 return false;
+            }
+            finally
+            {
+                if (outputWriter != null)
+                {
+                    outputWriter.Dispose();
+                }
             }
 
             return true;
